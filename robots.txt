@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Depois do primeiro deploy, adicione abaixo a URL real do seu sitemap:
+# Sitemap: https://SEU-DOMINIO-AQUI/sitemap.xml

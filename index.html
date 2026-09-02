@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- SEO básico -->
+  <title>StreakFlow | Rastreador de Hábitos com Streak</title>
+  <meta name="description" content="StreakFlow é um rastreador de hábitos com streak que ajuda usuários a criar hábitos, registrar conclusões diárias, acompanhar sequências e visualizar sua evolução.">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="author" content="Projeto acadêmico de Programação Web">
+  <meta name="theme-color" content="#080b12">
+
+  <!--
+    GOOGLE SEARCH CONSOLE
+    Depois que o site estiver publicado no Amplify:
+    1. Crie uma propriedade de Prefixo de URL no Google Search Console.
+    2. Escolha "Tag HTML".
+    3. Cole a tag EXATA fornecida pelo Google abaixo e remova os comentários.
+
+    Exemplo:
+    <meta name="google-site-verification" content="SEU_TOKEN_REAL_DO_GOOGLE">
+  -->
+
+  <!--
+    URL CANÔNICA
+    Depois do primeiro deploy, substitua pela URL REAL do Amplify ou pelo seu domínio próprio:
+    <link rel="canonical" href="https://SEU-DOMINIO-AQUI/">
+  -->
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="pt_BR">
+  <meta property="og:site_name" content="StreakFlow">
+  <meta property="og:title" content="StreakFlow | Transforme constância em progresso">
+  <meta property="og:description" content="Crie hábitos, marque suas conquistas diárias, mantenha seu streak e acompanhe sua evolução.">
+
+  <!-- Twitter / X -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="StreakFlow | Rastreador de Hábitos">
+  <meta name="twitter:description" content="Um rastreador de hábitos simples, motivador e focado em constância.">
+
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Dados estruturados: WebSite -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "StreakFlow",
+    "description": "Rastreador de hábitos com sistema de streak para acompanhamento de constância e evolução.",
+    "inLanguage": "pt-BR"
+  }
+  </script>
+
+  <!-- Dados estruturados: WebApplication -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "StreakFlow",
+    "applicationCategory": "LifestyleApplication",
+    "operatingSystem": "Web",
+    "description": "Aplicação web para criação e acompanhamento de hábitos, registros diários e sequências de dias consecutivos.",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "BRL"
+    }
+  }
+  </script>
+</head>
+
+<body>
+  <div class="page-noise" aria-hidden="true"></div>
+
+  <header class="header" id="topo">
+    <div class="container nav">
+      <a class="brand" href="#topo" aria-label="StreakFlow - início">
+        <span class="brand-mark">S</span>
+        <span>Streak<span class="brand-highlight">Flow</span></span>
+      </a>
+
+      <button class="menu-button" aria-label="Abrir menu" aria-expanded="false">
+        <span></span><span></span>
+      </button>
+
+      <nav class="nav-links" aria-label="Navegação principal">
+        <a href="#funcionalidades">Funcionalidades</a>
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#arquitetura">Arquitetura</a>
+        <a href="#seguranca">Segurança</a>
+      </nav>
+
+      <a class="nav-cta" href="#demo">Ver demonstração</a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="hero-glow hero-glow-one"></div>
+      <div class="hero-glow hero-glow-two"></div>
+
+      <div class="container hero-grid">
+        <div class="hero-copy reveal">
+          <div class="eyebrow">
+            <span class="eyebrow-dot"></span>
+            Projeto de Programação Web
+          </div>
+
+          <h1>
+            Pequenos hábitos.<br>
+            <span>Grandes sequências.</span>
+          </h1>
+
+          <p class="hero-description">
+            O <strong>StreakFlow</strong> transforma constância em progresso.
+            Cadastre hábitos, marque suas conquistas diárias e acompanhe
+            quantos dias você consegue manter sua sequência.
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#funcionalidades">
+              Explorar funcionalidades
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a class="button button-secondary" href="#arquitetura">
+              Ver arquitetura
+            </a>
+          </div>
+
+          <div class="hero-stats">
+            <div>
+              <strong>01</strong>
+              <span>Crie o hábito</span>
+            </div>
+            <div>
+              <strong>02</strong>
+              <span>Marque o dia</span>
+            </div>
+            <div>
+              <strong>03</strong>
+              <span>Mantenha o streak</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="app-preview reveal delay-1" id="demo">
+          <div class="preview-top">
+            <div>
+              <p class="preview-label">Seu progresso</p>
+              <h2>Boa noite 👋</h2>
+            </div>
+            <div class="avatar">SF</div>
+          </div>
+
+          <div class="score-card">
+            <div>
+              <span class="score-kicker">Sequência atual</span>
+              <div class="score-value">
+                <span class="fire">🔥</span>
+                <strong id="main-streak">7</strong>
+                <span>dias</span>
+              </div>
+            </div>
+            <div class="mini-chart" aria-label="Progresso semanal">
+              <span style="--h: 38%"></span>
+              <span style="--h: 55%"></span>
+              <span style="--h: 47%"></span>
+              <span style="--h: 72%"></span>
+              <span style="--h: 63%"></span>
+              <span style="--h: 88%"></span>
+              <span class="active" style="--h: 100%"></span>
+            </div>
+          </div>
+
+          <div class="today-head">
+            <div>
+              <span>Hoje</span>
+              <strong id="progress-text">2 de 3 concluídos</strong>
+            </div>
+            <div class="progress-ring" id="progress-ring" style="--progress: 67">
+              <span id="progress-number">67%</span>
+            </div>
+          </div>
+
+          <div class="habit-list">
+            <button class="habit completed" data-habit aria-pressed="true">
+              <span class="habit-icon water">💧</span>
+              <span class="habit-copy">
+                <strong>Beber água</strong>
+                <small>Meta diária • 2 litros</small>
+              </span>
+              <span class="habit-check">✓</span>
+            </button>
+
+            <button class="habit completed" data-habit aria-pressed="true">
+              <span class="habit-icon study">⌘</span>
+              <span class="habit-copy">
+                <strong>Estudar programação</strong>
+                <small>Meta diária • 60 minutos</small>
+              </span>
+              <span class="habit-check">✓</span>
+            </button>
+
+            <button class="habit" data-habit aria-pressed="false">
+              <span class="habit-icon exercise">⚡</span>
+              <span class="habit-copy">
+                <strong>Exercício</strong>
+                <small>Meta diária • 30 minutos</small>
+              </span>
+              <span class="habit-check">✓</span>
+            </button>
+          </div>
+
+          <p class="preview-tip">Experimente marcar ou desmarcar os hábitos.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="funcionalidades">
+      <div class="container">
+        <div class="section-heading reveal">
+          <div>
+            <span class="section-kicker">FUNCIONALIDADES</span>
+            <h2>O necessário para transformar intenção em rotina.</h2>
+          </div>
+          <p>
+            A aplicação reúne as operações essenciais de um rastreador de hábitos
+            em uma experiência simples, visual e objetiva.
+          </p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card feature-main reveal">
+            <div class="feature-number">01</div>
+            <div class="feature-icon">＋</div>
+            <h3>Cadastro de hábitos</h3>
+            <p>
+              O usuário cria hábitos personalizados, define sua meta e mantém
+              todas as atividades organizadas em um único lugar.
+            </p>
+            <div class="mock-input">
+              <span>Estudar programação</span>
+              <span>Adicionar →</span>
+            </div>
+          </article>
+
+          <article class="feature-card reveal delay-1">
+            <div class="feature-number">02</div>
+            <div class="feature-icon">✓</div>
+            <h3>Registro diário</h3>
+            <p>
+              Um clique registra o cumprimento do hábito no dia e atualiza
+              imediatamente o progresso.
+            </p>
+          </article>
+
+          <article class="feature-card reveal delay-2">
+            <div class="feature-number">03</div>
+            <div class="feature-icon">🔥</div>
+            <h3>Streak automático</h3>
+            <p>
+              A aplicação calcula a sequência de períodos consecutivos e mantém
+              o usuário motivado a não quebrar o ritmo.
+            </p>
+          </article>
+
+          <article class="feature-card reveal">
+            <div class="feature-number">04</div>
+            <div class="feature-icon">↗</div>
+            <h3>Histórico e progresso</h3>
+            <p>
+              Visualização das conclusões anteriores, percentual de desempenho,
+              sequência atual e melhor streak alcançado.
+            </p>
+          </article>
+
+          <article class="feature-card reveal delay-1">
+            <div class="feature-number">05</div>
+            <div class="feature-icon">✎</div>
+            <h3>Gerenciamento completo</h3>
+            <p>
+              Criação, consulta, edição e exclusão de hábitos seguindo as
+              operações fundamentais de um CRUD.
+            </p>
+          </article>
+
+          <article class="feature-card reveal delay-2">
+            <div class="feature-number">06</div>
+            <div class="feature-icon">⌁</div>
+            <h3>Conta individual</h3>
+            <p>
+              Cada usuário acessa somente seus próprios hábitos, registros e
+              informações de progresso.
+            </p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-contrast" id="como-funciona">
+      <div class="container">
+        <div class="section-heading reveal">
+          <div>
+            <span class="section-kicker">FLUXO DO USUÁRIO</span>
+            <h2>Três passos. Todos os dias.</h2>
+          </div>
+          <p>
+            A experiência foi pensada para reduzir atrito: o usuário entende
+            rapidamente o que precisa fazer e visualiza sua evolução.
+          </p>
+        </div>
+
+        <div class="steps">
+          <article class="step reveal">
+            <span class="step-index">01</span>
+            <div class="step-line"></div>
+            <h3>Defina</h3>
+            <p>Cadastre o hábito que deseja construir e determine sua meta.</p>
+          </article>
+          <article class="step reveal delay-1">
+            <span class="step-index">02</span>
+            <div class="step-line"></div>
+            <h3>Execute</h3>
+            <p>Ao cumprir a atividade, marque a conclusão daquele período.</p>
+          </article>
+          <article class="step reveal delay-2">
+            <span class="step-index">03</span>
+            <div class="step-line"></div>
+            <h3>Evolua</h3>
+            <p>Acompanhe o streak, o histórico e a sua consistência ao longo do tempo.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="arquitetura">
+      <div class="container architecture-grid">
+        <div class="architecture-copy reveal">
+          <span class="section-kicker">ARQUITETURA</span>
+          <h2>Frontend simples. Backend preparado para crescer.</h2>
+          <p>
+            A solução separa interface, API, regras de negócio e persistência de dados.
+            Isso facilita manutenção, segurança e evolução do projeto.
+          </p>
+
+          <div class="tech-tags">
+            <span>HTML5</span>
+            <span>CSS3</span>
+            <span>JavaScript</span>
+            <span>Node.js</span>
+            <span>REST API</span>
+            <span>AWS</span>
+          </div>
+        </div>
+
+        <div class="architecture-map reveal delay-1">
+          <div class="arch-node">
+            <span class="arch-label">CLIENTE</span>
+            <strong>HTML + CSS + JavaScript</strong>
+            <small>Interface e interação</small>
+          </div>
+          <div class="arch-connector"><span>HTTPS / JSON</span></div>
+          <div class="arch-row">
+            <div class="arch-node">
+              <span class="arch-label">API</span>
+              <strong>API Gateway</strong>
+              <small>Rotas HTTP</small>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node highlight">
+              <span class="arch-label">BACKEND</span>
+              <strong>Node.js</strong>
+              <small>AWS Lambda</small>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-node">
+              <span class="arch-label">DADOS</span>
+              <strong>DynamoDB</strong>
+              <small>Persistência</small>
+            </div>
+          </div>
+          <div class="arch-foot">
+            <span></span>
+            Arquitetura serverless orientada a serviços
+            <span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="seguranca">
+      <div class="container security-card reveal">
+        <div class="security-copy">
+          <span class="section-kicker">SEGURANÇA</span>
+          <h2>Privilégio mínimo por padrão.</h2>
+          <p>
+            Usuários e serviços recebem apenas as permissões necessárias para
+            executar suas próprias tarefas.
+          </p>
+        </div>
+
+        <div class="security-list">
+          <div>
+            <span>01</span>
+            <p><strong>Dados isolados</strong> — cada usuário consulta e altera apenas seus próprios hábitos.</p>
+          </div>
+          <div>
+            <span>02</span>
+            <p><strong>Backend como barreira</strong> — regras críticas são validadas no servidor, não apenas no navegador.</p>
+          </div>
+          <div>
+            <span>03</span>
+            <p><strong>Permissões específicas</strong> — funções e serviços acessam somente os recursos realmente necessários.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section final-section">
+      <div class="container final-card reveal">
+        <span class="final-orbit orbit-one"></span>
+        <span class="final-orbit orbit-two"></span>
+
+        <div class="final-content">
+          <span class="section-kicker">CONSTÂNCIA &gt; PERFEIÇÃO</span>
+          <h2>Seu próximo streak começa com o primeiro dia.</h2>
+          <p>
+            Uma aplicação web focada em hábitos, progresso e motivação através
+            de uma experiência simples e mensurável.
+          </p>
+          <a class="button button-primary" href="#demo">Ver demonstração ↑</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container footer-inner">
+      <a class="brand" href="#topo">
+        <span class="brand-mark">S</span>
+        <span>Streak<span class="brand-highlight">Flow</span></span>
+      </a>
+      <p>Projeto acadêmico • Programação Web</p>
+      <p>HTML • CSS • JavaScript • Node.js • AWS</p>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
