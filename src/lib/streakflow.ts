@@ -2,7 +2,7 @@
 import { dateKey, isDateKey, weekDays } from './habits'
 import { addValues, calculateProgressPercentage, getCheckInStatus, getTracking, isNumericTracking, validateTracking, validateValue } from './tracking'
 import { getHabitStreaks, isPlannedRest } from './consistency'
-import { readLegacy, readStored, removeSession, STORAGE_KEYS, writeStored } from './storage'
+import { hasStoredSession, readLegacy, readStored, removeSession, STORAGE_KEYS, writeStored } from './storage'
 
 export const DEFAULT_SETTINGS: Settings = {
   compact: false,
@@ -73,7 +73,7 @@ export function getState(): StreakFlowState {
   try {
     const stored = readStored('data')
     const data = stored === null ? migrateLegacy() : validateData(stored)
-    snapshot = { ...data, authenticated: !!data.user && readStored('session') === true, storageError: null }
+    snapshot = { ...data, authenticated: !!data.user && hasStoredSession(), storageError: null }
   } catch {
     snapshot = { ...emptyData(), authenticated: false, storageError: 'Não foi possível carregar os dados locais. O armazenamento pode estar bloqueado ou conter dados inválidos. Os dados originais foram preservados; verifique o navegador e tente novamente.' }
   }
@@ -130,6 +130,8 @@ export function getUser() { return writableState().user }
 export function createUser(user: User) {
   const current = writableState()
   if (current.user) throw new Error('Já existe uma conta neste navegador. Entre com seu cadastro existente.')
+  // Cadastro não faz login nem herda uma marca de sessão sem conta associada.
+  removeSession()
   commit({ ...current, user: { ...user, profile: validateProfile(user.profile), joinedAt: dateKey() } })
 }
 

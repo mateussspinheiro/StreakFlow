@@ -22,6 +22,12 @@ export function writeStored(key: keyof typeof STORAGE_KEYS, value: unknown) {
   catch { throw new Error('Não foi possível salvar. Verifique o espaço e a permissão de armazenamento do navegador.') }
 }
 
+// Uma sessão inválida não deve impedir a leitura dos dados do usuário.
+export function hasStoredSession() {
+  try { return readStored('session') === true }
+  catch { return false }
+}
+
 export function removeSession() {
   try { localStorage.removeItem(STORAGE_KEYS.session) }
   catch { throw new Error('Não foi possível encerrar a sessão neste navegador. Tente novamente.') }

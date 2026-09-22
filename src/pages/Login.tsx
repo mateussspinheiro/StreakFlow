@@ -49,7 +49,9 @@ function Login({ onEnter }: LoginProps) {
       return;
     } finally { setBusy(false); }
 
-    navigate("/dashboard", { replace: true });
+    const from = location.state?.from;
+    const destination = typeof from === 'string' && /^\/(?:dashboard(?:\/[^?#\\]*)?|meus-habitos\/?|historico\/?|progresso\/?)(?:[?#][^\\]*)?$/.test(from) ? from : '/dashboard';
+    navigate(destination, { replace: true });
   }
 
   return (

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Navigate } from 'react-router'
+import { Navigate, useLocation } from 'react-router'
 
 interface ProtectedRouteProps {
   authenticated: boolean
@@ -7,7 +7,8 @@ interface ProtectedRouteProps {
 }
 
 function ProtectedRoute({ authenticated, children }: ProtectedRouteProps) {
-  return authenticated ? children : <Navigate to="/login" replace />
+  const location = useLocation()
+  return authenticated ? children : <Navigate to="/login" replace state={{ from: `${location.pathname}${location.search}${location.hash}` }} />
 }
 
 export default ProtectedRoute
