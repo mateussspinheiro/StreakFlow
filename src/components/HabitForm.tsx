@@ -1,4 +1,4 @@
-﻿import { Link } from 'react-router'
+import { Link } from 'react-router'
 import { useState, type FormEvent } from 'react'
 import type { Habit, HabitInput } from '../lib/types'
 import Field from './Field'
@@ -31,6 +31,6 @@ export default function HabitForm({ habit, onSave }: { habit?: Habit; onSave: (i
     <Field name="estimatedMinutes" label="Duração estimada em minutos (opcional)" type="number" min={1} max={1440} step={1} defaultValue={habit?.estimatedMinutes} placeholder="Ex.: 20" />
     <label className="block text-sm font-semibold">Cor de identificação<select name="color" defaultValue={habit?.color ?? 'purple'} className="mt-2 block w-full"><option value="purple">Roxo</option><option value="violet">Violeta</option><option value="indigo">Azul-arroxeado</option><option value="gray">Cinza</option></select></label>
     {error && <p role="alert" className="notice notice-error">{error}</p>}
-    <div className="flex items-center gap-5"><button className="primary" type="submit">Salvar hábito</button><Link to="/dashboard/habitos" className="text-slate-500">Cancelar</Link></div>
+    <div className="flex items-center gap-5"><button className="primary" type="submit">Salvar hábito</button><Link to="/meus-habitos" className="text-slate-500">Cancelar</Link></div>
   </form>
 }

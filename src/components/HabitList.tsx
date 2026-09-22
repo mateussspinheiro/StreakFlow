@@ -29,6 +29,6 @@ export default function HabitList({ habits, records, today, summary = false, onC
         <div className="habit-card-bottom"><span className="streak-inline"><Mascot size={23} />{streak(dates, currentDate)} dias</span><div className="habit-actions"><Link className="quiet-button" to={`/dashboard/editar-habito/${habit.id}`} aria-label={`Editar hábito ${habit.title}`}>Editar</Link><button className="quiet-button danger-text" aria-label={`Excluir ${habit.title}`} onClick={() => onDelete(habit)}>Excluir</button><button className={record ? 'secondary' : 'primary'} onClick={() => onCheckIn(habit, record)}>{record ? 'Editar registro' : 'Registrar'}</button></div></div>
       </article>
     })}</div>}
-    {summary && <Link className="text-link" to="/dashboard/habitos">Gerenciar meus hábitos →</Link>}
+    {summary && <Link className="text-link" to="/meus-habitos">Gerenciar meus hábitos →</Link>}
   </section>
 }

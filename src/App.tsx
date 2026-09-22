@@ -17,9 +17,15 @@ import Historico from "./pages/Historico";
 import Progresso from "./pages/Progresso";
 import Perfil from "./pages/Perfil";
 import Configuracoes from "./pages/Configuracoes";
+import NotFound from './pages/NotFound';
 
 import DashboardLayout from "./layouts/DashboardLayout";
 import ProtectedRoute from "./components/ProtectedRoute";
+
+function LegacyRedirect({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to}${search}${hash}`} replace />;
+}
 
 function App() {
   const navigate = useNavigate();
@@ -31,10 +37,8 @@ function App() {
 
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
   useEffect(() => {
-    if (!location.pathname.startsWith('/dashboard')) {
-      const titles: Record<string, string> = { '/login': 'Entrar', '/cadastro': 'Criar conta', '/termos': 'Termos', '/privacidade': 'Privacidade', '/recuperar': 'Recuperar senha' };
-      document.title = `${titles[location.pathname] || 'Um dia de cada vez'} | StreakFlow`;
-    }
+    const titles: Record<string, string> = { '/': 'Um dia de cada vez', '/login': 'Entrar', '/cadastro': 'Criar conta', '/termos': 'Termos', '/privacidade': 'Privacidade', '/recuperar': 'Recuperar senha' };
+    if (titles[location.pathname]) document.title = `${titles[location.pathname]} | StreakFlow`;
   }, [location.pathname]);
 
   function logout() {
@@ -71,7 +75,6 @@ function App() {
       {/* ÁREA LOGADA */}
 
       <Route
-        path="/dashboard"
         element={
           <ProtectedRoute authenticated={session}>
             <DashboardLayout profile={profile} onProfileChange={updateProfile} onLogout={logout} />
@@ -79,51 +82,59 @@ function App() {
         }
       >
         <Route
-          index
+          path="/dashboard"
           element={<Dashboard />}
         />
 
         <Route
-          path="habitos"
+          path="/meus-habitos"
           element={<MeusHabitos />}
         />
 
         <Route
-          path="historico"
+          path="/historico"
           element={<Historico />}
         />
 
         <Route
-          path="progresso"
+          path="/progresso"
           element={<Progresso />}
         />
 
         <Route
-          path="perfil"
+          path="/dashboard/perfil"
           element={<Perfil />}
         />
 
         <Route
-          path="configuracoes"
+          path="/dashboard/configuracoes"
           element={<Configuracoes />}
         />
-        <Route path="novo-habito" element={<DashboardContent key="novo-habito" route="novo-habito" />} />
-        <Route path="editar-habito/:id" element={<DashboardContent key={location.pathname} route={location.pathname.slice('/dashboard/'.length)} />} />
-        <Route path="*" element={<DashboardContent route="nao-encontrado" />} />
+        <Route path="/dashboard/novo-habito" element={<DashboardContent key="novo-habito" route="novo-habito" />} />
+        <Route path="/dashboard/editar-habito/:id" element={<DashboardContent key={location.pathname} route={location.pathname.slice('/dashboard/'.length)} />} />
+        <Route path="/dashboard/*" element={<NotFound />} />
       </Route>
 
       {['recuperar', 'termos', 'privacidade'].map(page => (
         <Route key={page} path={`/${page}`} element={<AuthLayout><AuthForm key={page} route={page} /></AuthLayout>} />
       ))}
-      {['habitos', 'historico', 'progresso', 'perfil', 'configuracoes', 'novo-habito'].map(page => (
-        <Route key={page} path={`/${page}`} element={<Navigate to={`/dashboard/${page}`} replace />} />
+      {Object.entries({
+        '/habitos': '/meus-habitos',
+        '/dashboard/habitos': '/meus-habitos',
+        '/dashboard/historico': '/historico',
+        '/dashboard/progresso': '/progresso',
+        '/perfil': '/dashboard/perfil',
+        '/configuracoes': '/dashboard/configuracoes',
+        '/novo-habito': '/dashboard/novo-habito',
+      }).map(([from, to]) => (
+        <Route key={from} path={from} element={<LegacyRedirect to={to} />} />
       ))}
 
       {/* ROTA INVÁLIDA */}
 
       <Route
         path="*"
-        element={<Navigate to="/" replace />}
+        element={<NotFound />}
       />
     </Routes>
     </>
