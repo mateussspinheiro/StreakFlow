@@ -1,6 +1,7 @@
 import { dateKey, previousDays } from './habits'
 import { habitDates } from './streakflow'
 import type { CheckIn, Habit } from './types'
+import { isPlannedRest } from './consistency'
 
 // Compare janelas completas e equivalentes. Não extrapole tendências a partir de um único dia.
 export function getInsights(habits: Habit[], records: CheckIn[], today = new Date()) {
@@ -9,13 +10,15 @@ export function getInsights(habits: Habit[], records: CheckIn[], today = new Dat
   const previous = new Set(days.slice(0, 7))
   const completed = records.filter(c => c.status === 'completed' && c.date <= dateKey(today))
   const ranked = habits.map(habit => {
-    const eligible = days.slice(7).filter(day => day >= habit.createdAt).length
+    const observed = days.slice(7).filter(day => day >= habit.createdAt).length
+    const rest = records.filter(c => c.habitId === habit.id && recent.has(c.date) && isPlannedRest(c)).length
+    const eligible = observed - rest
     const count = habitDates(completed, habit.id).filter(day => recent.has(day)).length
-    return { habit, count, eligible, rate: eligible ? count / eligible : 0 }
-  }).filter(item => item.eligible === 7 && item.count > 0).sort((a, b) => b.rate - a.rate || a.habit.id - b.habit.id)
+    return { habit, count, eligible, observed, rate: eligible ? count / eligible : 0 }
+  }).filter(item => item.observed === 7 && item.eligible > 0 && item.count > 0).sort((a, b) => b.rate - a.rate || a.habit.id - b.habit.id)
   const mostConsistent = ranked.length && (ranked.length === 1 || ranked[0].rate > ranked[1].rate) ? ranked[0] : null
   const messages: string[] = []
-  if (mostConsistent) messages.push(`${mostConsistent.habit.title}: ${mostConsistent.count} conclusões nos últimos 7 dias, seu hábito mais consistente nesse período.`)
+  if (mostConsistent) messages.push(`${mostConsistent.habit.title}: ${mostConsistent.count} conclusões em ${mostConsistent.eligible} dias de atividade nos últimos 7 dias, seu hábito mais consistente nesse período.`)
   const stableIds = new Set(habits.filter(h => h.createdAt <= days[0]).map(h => h.id))
   const currentCount = completed.filter(c => stableIds.has(c.habitId) && recent.has(c.date)).length
   const previousCount = completed.filter(c => stableIds.has(c.habitId) && previous.has(c.date)).length

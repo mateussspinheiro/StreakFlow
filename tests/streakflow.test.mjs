@@ -1,30 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
-import { webcrypto } from 'node:crypto'
-import vm from 'node:vm'
-import ts from 'typescript'
-
-function app(initial = []) {
-  const data = new Map(initial)
-  let blocked = false
-  const localStorage = {
-    getItem: key => data.get(key) ?? null,
-    setItem: (key, value) => { if (blocked) throw new Error('quota'); data.set(key, value) },
-    removeItem: key => { if (blocked) throw new Error('blocked'); data.delete(key) },
-  }
-  const modules = new Map()
-  function load(name) {
-    if (modules.has(name)) return modules.get(name)
-    const source = readFileSync(new URL(`../src/lib/${name}.ts`, import.meta.url), 'utf8')
-    const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText
-    const context = { exports: {}, localStorage, sessionStorage: { getItem: () => null }, crypto: webcrypto, TextEncoder, require: path => load(path.slice(2)) }
-    vm.runInNewContext(compiled, context)
-    modules.set(name, context.exports)
-    return context.exports
-  }
-  return { store: load('streakflow'), auth: load('auth'), dates: load('habits'), insights: load('insights'), data, block: () => { blocked = true } }
-}
+import { app } from './helpers/store.mjs'
 
 const profile = { name: 'Pessoa Teste', email: 'teste@example.com' }
 const input = { title: 'Ler', description: '20 minutos', category: 'Estudos', weeklyGoal: 3 }

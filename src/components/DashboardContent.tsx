@@ -2,8 +2,10 @@ import { Link, useNavigate, useOutletContext } from 'react-router'
 import { useEffect, useState } from 'react'
 import type { CheckIn, CheckInInput, Habit } from '../lib/types'
 import type { DashboardContext } from '../lib/dashboard'
-import { dateKey, streak } from '../lib/habits'
-import { deleteHabit, exportData as getExportData, getIndicators, getState, habitDates, removeCheckIn, saveCheckIn, saveHabit, saveSettings } from '../lib/streakflow'
+import { dateKey } from '../lib/habits'
+import { addProgress, completeCheckIn, deleteHabit, exportData as getExportData, getIndicators, getState, removeCheckIn, saveCheckIn, saveHabit, saveSettings } from '../lib/streakflow'
+import { getHabitStreaks } from '../lib/consistency'
+import { checkInFeedback } from '../lib/tracking'
 import { useStreakFlow } from '../lib/useStreakFlow'
 import { formatDate } from '../lib/checkins'
 import HabitForm from './HabitForm'
@@ -38,7 +40,6 @@ export default function DashboardContent({ route }: { route: string }) {
   const [deleting, setDeleting] = useState<Habit | null>(null)
   const [deleteError, setDeleteError] = useState('')
   const [pulse, setPulse] = useState(0)
-  const [celebrating, setCelebrating] = useState(false)
   useEffect(() => {
     const update = () => setNow(new Date())
     const timer = window.setInterval(update, 30000)
@@ -50,15 +51,24 @@ export default function DashboardContent({ route }: { route: string }) {
   const { bestStreak, checkIns } = getIndicators({ habits, completions }, now)
   const editing = route.startsWith('editar-habito/') ? habits.find(h => h.id === Number(route.split('/')[1])) : undefined
   const greeting = now.getHours() < 12 ? 'Bom dia' : now.getHours() < 18 ? 'Boa tarde' : 'Boa noite'
-  function saveRecord(input: CheckInInput) {
-    const before = streak(habitDates(completions, input.habitId), now)
-    saveCheckIn(input)
-    const after = streak(habitDates(getState().completions, input.habitId), now)
+  function recordSaved(record: CheckIn, before: number) {
+    const currentTime = new Date()
+    const after = getHabitStreaks(getState().completions, record.habitId, currentTime).current
     if (after > before) setPulse(value => value + 1)
-    setCelebrating(after > before)
     setCheckIn(null)
+    setNow(currentTime)
     setError('')
-    setNotice(input.status === 'completed' ? `Check-in registrado. Sua sequência neste hábito é de ${after} ${after === 1 ? 'dia' : 'dias'}.` : 'Check-in registrado. Você pode revisá-lo quando precisar.')
+    setNotice(checkInFeedback(record))
+  }
+  function saveRecord(input: CheckInInput) {
+    const before = getHabitStreaks(getState().completions, input.habitId).current
+    recordSaved(saveCheckIn(input), before)
+  }
+  function quickCheckIn(habitId: number, delta?: number) {
+    try {
+      const before = getHabitStreaks(getState().completions, habitId).current
+      recordSaved(delta === undefined ? completeCheckIn(habitId) : addProgress(habitId, delta), before)
+    } catch (cause) { setNotice(''); setError(cause instanceof Error ? cause.message : 'Não foi possível registrar o progresso.') }
   }
   function exportData() {
     try {
@@ -71,10 +81,10 @@ export default function DashboardContent({ route }: { route: string }) {
   }
   return <div className={`page-content ${settings.compact ? 'compact' : ''}`}>
     <header className="page-heading"><div><p className="eyebrow">{route === 'dashboard' ? formatDate(today) : 'STREAKFLOW / SEU ESPAÇO'}</p><h1>{route === 'dashboard' ? `${greeting}, ${profile.name.split(' ')[0]}.` : pages[route]?.[0] || (editing ? 'Editar hábito' : route === 'novo-habito' ? 'Novo hábito' : 'Página não encontrada')}</h1><p className="muted">{pages[route]?.[1] || 'Uma ação simples, um passo possível.'}</p></div>{['dashboard', 'habitos'].includes(route) && <Link className="primary" to="/dashboard/novo-habito">+ Novo hábito</Link>}</header>
-    <Feedback message={notice} celebrate={celebrating && notice.startsWith('Check-in registrado.')} onClose={() => setNotice('')} />
+    <Feedback message={notice} onClose={() => setNotice('')} />
     <Feedback message={error} error onClose={() => setError('')} />
     {route === 'dashboard' && <DayOverview habits={habits} records={completions} today={now} pulse={pulse} />}
-    {['dashboard', 'habitos'].includes(route) && <HabitList habits={habits} records={completions} today={today} summary={route === 'dashboard'} onCheckIn={(habit, record) => setCheckIn({ habit, record })} onDelete={habit => { setDeleteError(''); setDeleting(habit) }} />}
+    {['dashboard', 'habitos'].includes(route) && <HabitList habits={habits} records={completions} today={today} summary={route === 'dashboard'} onQuickCheckIn={quickCheckIn} onCheckIn={(habit, record) => setCheckIn({ habit, record })} onDelete={habit => { setDeleteError(''); setDeleting(habit) }} />}
     {route === 'historico' && <HistoryPanel habits={habits} records={completions} today={today} onEdit={(habit, record) => setCheckIn({ habit, record })} />}
     {route === 'progresso' && <ProgressPanel habits={habits} records={completions} settings={settings} today={today} />}
     {(route === 'novo-habito' || editing) && <HabitForm key={route} habit={editing} onSave={input => { saveHabit(input, editing?.id); navigate('/meus-habitos') }} />}

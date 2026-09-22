@@ -1,6 +1,10 @@
 ﻿import type { SVGProps } from 'react'
 
 const paths = {
+  pending: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+  partial: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM12 3v18',
+  postponed: 'M4 12h16m-6-6 6 6-6 6',
+  rest: 'M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z',
   dashboard: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z',
   history: 'M3 11a9 9 0 1 1 2.5 7M3 4v7h7m2-4v5l3 2',
   profile: 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0ZM4 21v-2a8 8 0 0 1 16 0v2',

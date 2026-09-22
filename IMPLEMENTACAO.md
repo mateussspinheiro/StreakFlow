@@ -1,4 +1,6 @@
-﻿# StreakFlow — evolução de produto
+# StreakFlow — evolução de produto
+
+> Este relatório descreve a evolução visual anterior. A extensão atual dos registros, incluindo quantidades, metas diárias e descanso planejado, está documentada em [CHECKIN_INTELIGENTE.md](CHECKIN_INTELIGENTE.md). O roteamento está descrito em [ROUTING_DEPLOY.md](ROUTING_DEPLOY.md).
 
 A aplicação existente foi evoluída sem recriar o projeto, instalar dependências ou alterar Vite, Tailwind, ESLint, scripts ou configuração de deploy nesta etapa. React Router, autenticação simulada e persistência centralizada foram preservados.
 

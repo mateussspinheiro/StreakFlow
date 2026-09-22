@@ -1,5 +1,7 @@
 ﻿import type { CheckInInput, Completion, Habit, HabitInput, Profile, Settings, StreakFlowData, StreakFlowState, User } from './types'
-import { dateKey, isDateKey, longestStreak, streak, weekDays } from './habits'
+import { dateKey, isDateKey, weekDays } from './habits'
+import { addValues, calculateProgressPercentage, getCheckInStatus, getTracking, isNumericTracking, validateTracking, validateValue } from './tracking'
+import { getHabitStreaks, isPlannedRest } from './consistency'
 import { readLegacy, readStored, removeSession, STORAGE_KEYS, writeStored } from './storage'
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -20,6 +22,7 @@ const isSettings = (value: unknown): value is Settings => isRecord(value) && typ
 function validateData(value: unknown): StreakFlowData {
   if (!isRecord(value) || (value.version !== 2 && value.version !== 3) || (value.user !== null && !isUser(value.user)) || !Array.isArray(value.habits) || !value.habits.every(isHabit) || !Array.isArray(value.completions) || !isSettings(value.settings)) throw new Error('Formato de dados inválido.')
   const habits = value.habits
+  habits.forEach(habit => validateTracking(getTracking(habit)))
   const ids = new Set(habits.map(h => h.id))
   if (ids.size !== habits.length) throw new Error('Hábitos duplicados.')
   const seen = new Set<string>()
@@ -164,7 +167,9 @@ export function saveHabit(input: HabitInput, id?: number) {
   if (input.estimatedMinutes !== undefined && !validMinutes(input.estimatedMinutes)) throw new Error('A duração estimada deve ser de 1 a 1440 minutos.')
   const existing = current.habits.find(h => h.id === id)
   if (id !== undefined && !existing) throw new Error('Este hábito não foi encontrado.')
-  const habit: Habit = { ...input, title, description, category: input.category.trim() || 'Outros', id: existing?.id ?? Math.max(Date.now(), ...current.habits.map(h => h.id + 1)), createdAt: existing?.createdAt ?? dateKey() }
+  const tracking = getTracking({ ...existing, ...input })
+  validateTracking(tracking)
+  const habit: Habit = { ...existing, ...input, ...tracking, target: tracking.target, unit: tracking.unit, title, description, category: input.category.trim() || 'Outros', id: existing?.id ?? Math.max(Date.now(), ...current.habits.map(h => h.id + 1)), createdAt: existing?.createdAt ?? dateKey() }
   commit({ ...current, habits: existing ? current.habits.map(h => h.id === id ? habit : h) : [...current.habits, habit] })
   return habit
 }
@@ -175,11 +180,24 @@ export function deleteHabit(id: number) {
 }
 
 function validateCheckIn(input: Record<string, unknown>) {
-  if (!['completed', 'partial', 'skipped'].includes(String(input.status))) throw new Error('Escolha um status válido.')
+  if (!['pending', 'completed', 'partial', 'postponed', 'planned_rest', 'skipped'].includes(String(input.status))) throw new Error('Escolha um status válido.')
   if (input.time !== undefined && (typeof input.time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(input.time))) throw new Error('Informe um horário válido.')
   if (input.effort !== undefined && (!Number.isInteger(input.effort) || Number(input.effort) < 1 || Number(input.effort) > 5)) throw new Error('Escolha um esforço de 1 a 5.')
   if (input.durationMinutes !== undefined && !validMinutes(input.durationMinutes)) throw new Error('A duração deve ser de 1 a 1440 minutos.')
   if (input.note !== undefined && (typeof input.note !== 'string' || input.note.length > 500)) throw new Error('A observação deve ter até 500 caracteres.')
+  if (input.intensity !== undefined && !['light', 'moderate', 'intense'].includes(String(input.intensity))) throw new Error('Escolha uma intensidade válida.')
+  if (input.value !== undefined) validateValue(input.value)
+  if (input.tracking !== undefined) {
+    if (!isRecord(input.tracking)) throw new Error('A configuração do registro é inválida.')
+    const tracking = input.tracking as unknown as NonNullable<Completion['tracking']>
+    validateTracking(tracking)
+    if (isNumericTracking(tracking)) {
+      validateValue(input.value)
+      calculateProgressPercentage(input.value, tracking.target!)
+      if (getCheckInStatus(tracking, input.value, input.status as Completion['status']) !== input.status) throw new Error('O status não corresponde ao progresso registrado.')
+    }
+  }
+  if (input.status === 'planned_rest' && (!isRecord(input.tracking) || input.tracking.allowPlannedRest !== true)) throw new Error('Este registro não permite descanso planejado.')
 }
 
 // Um único check-in por hábito/data. Editar preserva o identificador.
@@ -188,10 +206,41 @@ export function saveCheckIn(input: CheckInInput) {
   const habit = current.habits.find(h => h.id === input.habitId)
   if (!habit) throw new Error('Este hábito não foi encontrado.')
   if (!isDateKey(input.date) || input.date > dateKey() || input.date < habit.createdAt) throw new Error('A data do check-in é inválida.')
-  validateCheckIn(input)
-  const record: Completion = { ...input, id: `${input.habitId}:${input.date}`, note: input.note?.trim() || undefined }
+  const existing = current.completions.find(c => c.habitId === input.habitId && c.date === input.date)
+  const tracking = getTracking(habit, existing)
+  validateTracking(tracking)
+  const value = isNumericTracking(tracking) ? input.value ?? existing?.value ?? 0 : input.value
+  const status = getCheckInStatus(tracking, value ?? 0, input.status)
+  const record: Completion = { ...input, tracking: { ...tracking }, value, status, id: `${input.habitId}:${input.date}`, note: input.note?.trim() || undefined }
+  validateCheckIn(record)
   commit({ ...current, completions: [...current.completions.filter(c => c.id !== record.id), record] })
   return record
+}
+
+export function getTodayCheckIn(habitId: number, date = dateKey()) {
+  return getState().completions.find(c => c.habitId === habitId && c.date === date)
+}
+
+// As ações rápidas leem o estado atual no clique; não acumulam sobre uma cópia do componente.
+export function addProgress(habitId: number, delta: number, date = dateKey()) {
+  const current = authenticatedState()
+  const habit = current.habits.find(h => h.id === habitId)
+  if (!habit) throw new Error('Este hábito não foi encontrado.')
+  const existing = getTodayCheckIn(habitId, date)
+  const tracking = getTracking(habit, existing)
+  if (!isNumericTracking(tracking)) throw new Error('Este hábito não usa progresso numérico.')
+  const now = new Date()
+  return saveCheckIn({ ...existing, habitId, date, time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`, value: addValues(existing?.value ?? 0, delta), status: 'pending' })
+}
+
+export function completeCheckIn(habitId: number, date = dateKey()) {
+  const current = authenticatedState()
+  const habit = current.habits.find(h => h.id === habitId)
+  if (!habit) throw new Error('Este hábito não foi encontrado.')
+  const existing = getTodayCheckIn(habitId, date)
+  const tracking = getTracking(habit, existing)
+  const now = new Date()
+  return saveCheckIn({ ...existing, habitId, date, time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`, status: 'completed', value: isNumericTracking(tracking) ? Math.max(existing?.value ?? 0, tracking.target!) : undefined })
 }
 
 export function removeCheckIn(id: string) {
@@ -202,8 +251,7 @@ export function removeCheckIn(id: string) {
 // Compatibilidade para clientes antigos. A interface usa o formulário de check-in.
 export function setCompletion(id: number, completed: boolean, date = dateKey()) {
   if (completed) {
-    const existing = getState().completions.find(c => c.habitId === id && c.date === date)
-    saveCheckIn({ ...existing, habitId: id, date, status: 'completed' })
+    completeCheckIn(id, date)
   } else removeCheckIn(`${id}:${date}`)
 }
 
@@ -223,16 +271,32 @@ export function habitDates(completions: Completion[], habitId: number) {
 }
 
 export function getIndicators(data: Pick<StreakFlowData, 'habits' | 'completions'>, today = new Date()) {
-  const completed = data.habits.filter(h => data.completions.some(c => c.habitId === h.id && c.date === dateKey(today) && c.status === 'completed')).length
-  const dates = data.habits.map(h => habitDates(data.completions, h.id))
+  const byHabit = new Map<number, Completion[]>()
+  const completedToday = new Set<number>()
+  const restingToday = new Set<number>()
+  const day = dateKey(today)
+  for (const record of data.completions) {
+    const list = byHabit.get(record.habitId) ?? []
+    list.push(record)
+    byHabit.set(record.habitId, list)
+    if (record.date === day && record.status === 'completed') completedToday.add(record.habitId)
+    if (record.date === day && isPlannedRest(record)) restingToday.add(record.habitId)
+  }
+  const completed = data.habits.filter(h => completedToday.has(h.id)).length
+  const sequences = data.habits.map(h => getHabitStreaks(byHabit.get(h.id) ?? [], h.id, today))
+  const rest = data.habits.filter(h => restingToday.has(h.id)).length
+  const scheduled = data.habits.length - rest
+  const evaluated = data.completions.filter(c => !isPlannedRest(c))
   return {
     completed,
-    progress: data.habits.length ? Math.round(completed / data.habits.length * 100) : 0,
-    currentStreak: Math.max(0, ...dates.map(days => streak(days, today))),
-    bestStreak: Math.max(0, ...dates.map(longestStreak)),
+    scheduled,
+    rest,
+    progress: scheduled ? Math.round(completed / scheduled * 100) : 0,
+    currentStreak: Math.max(0, ...sequences.map(s => s.current)),
+    bestStreak: Math.max(0, ...sequences.map(s => s.best)),
     total: data.completions.filter(c => c.status === 'completed').length,
     checkIns: data.completions.length,
-    completionRate: data.completions.length ? Math.round(data.completions.filter(c => c.status === 'completed').length / data.completions.length * 100) : null,
+    completionRate: evaluated.length ? Math.round(evaluated.filter(c => c.status === 'completed').length / evaluated.length * 100) : null,
   }
 }
 
