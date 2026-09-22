@@ -1,5 +1,6 @@
+import AuthLayout from '../components/AuthLayout';
 import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { validateAccount } from '../lib/auth';
 import type { Profile } from '../lib/types';
 
@@ -9,10 +10,13 @@ interface LoginProps {
 
 function Login({ onEnter }: LoginProps) {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -31,23 +35,25 @@ function Login({ onEnter }: LoginProps) {
       return;
     }
 
+    if (busy) return;
+    setBusy(true);
     try {
       const usuario = await validateAccount(email, senha);
       if (!usuario) {
-        setErro("E-mail ou senha incorretos. Se ainda não tem conta nesta aba, faça seu cadastro.");
+        setErro("E-mail ou senha incorretos. Se ainda não tem conta neste navegador, faça seu cadastro.");
         return;
       }
       onEnter(usuario);
     } catch {
       setErro("Não foi possível validar o login. Tente novamente.");
       return;
-    }
+    } finally { setBusy(false); }
 
-    navigate("/dashboard");
+    navigate("/dashboard", { replace: true });
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <AuthLayout>
 
       <div className="w-full max-w-md">
 
@@ -62,6 +68,7 @@ function Login({ onEnter }: LoginProps) {
         <p className="text-gray-500 mt-2">
           Continue evoluindo um dia de cada vez.
         </p>
+        {location.state?.registered === true && <p role="status" className="notice mt-5">Conta criada com sucesso! Entre com seu e-mail e senha.</p>}
 
         <form
           onSubmit={handleSubmit}
@@ -77,6 +84,7 @@ function Login({ onEnter }: LoginProps) {
               type="email"
               id="login-email"
               autoComplete="email"
+              required
               value={email}
               onChange={(e) =>
                 setEmail(e.target.value)
@@ -90,9 +98,10 @@ function Login({ onEnter }: LoginProps) {
             <label htmlFor="login-senha">Senha</label>
 
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               id="login-senha"
               autoComplete="current-password"
+              required
               value={senha}
               onChange={(e) =>
                 setSenha(e.target.value)
@@ -102,6 +111,7 @@ function Login({ onEnter }: LoginProps) {
             />
           </div>
 
+          <button type="button" className="text-sm font-semibold text-violet-600" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Ocultar senha" : "Mostrar senha"}</button>
           {erro && (
             <div role="alert" className="border border-red-500 bg-red-50 text-red-700 p-3 rounded-lg">
               {erro}
@@ -109,10 +119,10 @@ function Login({ onEnter }: LoginProps) {
           )}
 
           <button
-            type="submit"
-            className="w-full bg-black text-white p-3 rounded-lg"
+            type="submit" disabled={busy}
+            className="primary w-full"
           >
-            Entrar
+            {busy ? 'Entrando…' : 'Entrar'}
           </button>
 
         </form>
@@ -128,7 +138,7 @@ function Login({ onEnter }: LoginProps) {
         </p>
 
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 

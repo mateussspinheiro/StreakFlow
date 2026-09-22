@@ -1,7 +1,8 @@
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useEffect, useState } from 'react';
-import { read, save } from './lib/storage';
-import type { Profile } from './lib/types';
+import { endSession, refreshState, startSession, updateProfile } from './lib/streakflow';
+import { useStreakFlow } from './lib/useStreakFlow';
+import { useTheme } from './lib/useTheme';
 import DashboardContent from './components/DashboardContent';
 import AuthLayout from './components/AuthLayout';
 import AuthForm from './components/AuthForm';
@@ -23,30 +24,32 @@ import ProtectedRoute from "./components/ProtectedRoute";
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [session, setSession] = useState(() => read('session', false));
-  const [profile, setProfile] = useState<Profile>(() => read('profile', { name: 'Visitante', email: '' }));
+  const { authenticated: session, user, storageError, settings } = useStreakFlow();
+  useTheme(settings.theme);
+  const profile = user?.profile ?? { name: 'Visitante', email: '' };
+  const [error, setError] = useState('');
 
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
-
-  function updateProfile(next: Profile) {
-    setProfile(next);
-    save('profile', next);
-  }
-
-  function enter(next: Profile) {
-    updateProfile(next);
-    setSession(true);
-    save('session', true);
-  }
+  useEffect(() => {
+    if (!location.pathname.startsWith('/dashboard')) {
+      const titles: Record<string, string> = { '/login': 'Entrar', '/cadastro': 'Criar conta', '/termos': 'Termos', '/privacidade': 'Privacidade', '/recuperar': 'Recuperar senha' };
+      document.title = `${titles[location.pathname] || 'Um dia de cada vez'} | StreakFlow`;
+    }
+  }, [location.pathname]);
 
   function logout() {
-    setSession(false);
-    sessionStorage.removeItem('streakflow:session');
-    localStorage.removeItem('streakflow_logged');
-    navigate('/login', { replace: true });
+    try {
+      endSession();
+      setError('');
+      navigate('/login', { replace: true });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Não foi possível sair. Tente novamente.');
+    }
   }
 
   return (
+    <>
+    {(storageError || error) && <div role="alert" className="storage-alert">{storageError || error}<button className="secondary" onClick={() => { setError(''); refreshState(); }}>Tentar novamente</button></div>}
     <Routes>
       {/* PÁGINAS PÚBLICAS */}
 
@@ -57,12 +60,12 @@ function App() {
 
       <Route
         path="/login"
-        element={session ? <Navigate to="/dashboard" replace /> : <Login onEnter={enter} />}
+        element={session ? <Navigate to="/dashboard" replace /> : <Login onEnter={startSession} />}
       />
 
       <Route
         path="/cadastro"
-        element={session ? <Navigate to="/dashboard" replace /> : <Cadastro onRegister={updateProfile} />}
+        element={session ? <Navigate to="/dashboard" replace /> : <Cadastro />}
       />
 
       {/* ÁREA LOGADA */}
@@ -110,7 +113,7 @@ function App() {
       </Route>
 
       {['recuperar', 'termos', 'privacidade'].map(page => (
-        <Route key={page} path={`/${page}`} element={<AuthLayout><AuthForm key={page} route={page} profile={profile} onEnter={enter} /></AuthLayout>} />
+        <Route key={page} path={`/${page}`} element={<AuthLayout><AuthForm key={page} route={page} /></AuthLayout>} />
       ))}
       {['habitos', 'historico', 'progresso', 'perfil', 'configuracoes', 'novo-habito'].map(page => (
         <Route key={page} path={`/${page}`} element={<Navigate to={`/dashboard/${page}`} replace />} />
@@ -123,6 +126,7 @@ function App() {
         element={<Navigate to="/" replace />}
       />
     </Routes>
+    </>
   );
 }
 

@@ -1,101 +1,30 @@
-import { NavLink } from "react-router";
+﻿import { useState, useSyncExternalStore } from 'react'
+import { NavLink } from 'react-router'
+import type { Profile } from '../lib/types'
+import Icon from './Icon'
+import BrandLogo from './BrandLogo'
+import Modal from './Modal'
 
-function Sidebar({ onLogout }: { onLogout: () => void }) {
-
-  const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-4 py-3 rounded-lg transition ${
-      isActive
-        ? "bg-black text-white"
-        : "text-gray-600 hover:bg-gray-100"
-    }`;
-
-  function sair() {
-    onLogout();
-  }
-
-  return (
-    <aside className="w-full md:w-64 md:min-h-screen shrink-0 border-r bg-white p-5 flex flex-col">
-      {/* LOGO */}
-      <NavLink
-        to="/dashboard"
-        className="text-2xl font-bold mb-10"
-      >
-        StreakFlow
-      </NavLink>
-
-      {/* MENU PRINCIPAL */}
-      <nav className="flex flex-col gap-2">
-        <NavLink
-          to="/dashboard"
-          end
-          className={linkClass}
-        >
-          <span>▦</span>
-          Dashboard
-        </NavLink>
-
-        <NavLink
-          to="/dashboard/habitos"
-          className={linkClass}
-        >
-          <span>✓</span>
-          Meus hábitos
-        </NavLink>
-
-        <NavLink
-          to="/dashboard/historico"
-          className={linkClass}
-        >
-          <span>◷</span>
-          Histórico
-        </NavLink>
-
-        <NavLink
-          to="/dashboard/progresso"
-          className={linkClass}
-        >
-          <span>↗</span>
-          Progresso
-        </NavLink>
-      </nav>
-
-      {/* CONTA */}
-      <div className="mt-10">
-        <p className="text-xs uppercase text-gray-400 px-4 mb-3">
-          Conta
-        </p>
-
-        <nav className="flex flex-col gap-2">
-          <NavLink
-            to="/dashboard/perfil"
-            className={linkClass}
-          >
-            <span>○</span>
-            Meu perfil
-          </NavLink>
-
-          <NavLink
-            to="/dashboard/configuracoes"
-            className={linkClass}
-          >
-            <span>⚙</span>
-            Configurações
-          </NavLink>
-        </nav>
-      </div>
-
-      {/* LOGOUT */}
-      <div className="mt-auto">
-        <NavLink to="/" className={linkClass}>Página inicial</NavLink>
-        <button
-          onClick={sair}
-          className="w-full text-left px-4 py-3 rounded-lg text-red-600 hover:bg-red-50 transition"
-        >
-          Sair
-        </button>
-      </div>
-    </aside>
-  );
+const subscribe = (callback: () => void) => {
+  const media = window.matchMedia('(max-width: 767px)')
+  media.addEventListener('change', callback)
+  return () => media.removeEventListener('change', callback)
 }
+const isMobile = () => window.matchMedia('(max-width: 767px)').matches
+const mainLinks = [['/dashboard', 'Dashboard', 'dashboard'], ['/dashboard/habitos', 'Meus hábitos', 'check'], ['/dashboard/historico', 'Histórico', 'history'], ['/dashboard/progresso', 'Progresso', 'chart']] as const
+const accountLinks = [['/dashboard/perfil', 'Meu perfil', 'profile'], ['/dashboard/configuracoes', 'Configurações', 'settings']] as const
 
-export default Sidebar;
+export default function Sidebar({ onLogout, profile }: { onLogout: () => void; profile: Profile }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const mobile = useSyncExternalStore(subscribe, isMobile)
+  const linkClass = ({ isActive }: { isActive: boolean }) => `nav-item ${isActive ? 'nav-active' : ''}`
+  const content = <div className="sidebar-content" onClick={event => { if ((event.target as HTMLElement).closest('a')) setMenuOpen(false) }}>
+    <NavLink to="/dashboard" className="sidebar-brand"><BrandLogo /></NavLink>
+    <p className="nav-section-label">MINHA ROTINA</p>
+    <nav aria-label="Navegação principal">{mainLinks.map(([path, label, icon]) => <NavLink key={path} to={path} end={path === '/dashboard'} className={linkClass}><Icon name={icon} width={20} height={20} />{label}</NavLink>)}</nav>
+    <p className="nav-section-label account-label">CONTA</p>
+    <nav aria-label="Conta">{accountLinks.map(([path, label, icon]) => <NavLink key={path} to={path} className={linkClass}><Icon name={icon} width={20} height={20} />{label}</NavLink>)}</nav>
+    <div className="sidebar-bottom"><div className="sidebar-profile"><span aria-hidden="true">{profile.name.slice(0, 1).toUpperCase()}</span><div><strong>{profile.name}</strong><p>{profile.email}</p></div></div><NavLink to="/" className="nav-item">Página inicial</NavLink><button className="nav-item danger-text" onClick={() => { onLogout(); setMenuOpen(false) }}>Sair da conta</button></div>
+  </div>
+  return mobile ? <><header className="mobile-header"><NavLink to="/dashboard"><BrandLogo /></NavLink><button className="secondary" aria-expanded={menuOpen} aria-haspopup="dialog" onClick={() => setMenuOpen(true)}>Menu</button></header>{menuOpen && <Modal title="Navegação" className="drawer" onClose={() => setMenuOpen(false)}>{content}</Modal>}</> : <aside className="desktop-sidebar">{content}</aside>
+}

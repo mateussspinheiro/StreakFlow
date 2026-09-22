@@ -1,14 +1,9 @@
+import AuthLayout from '../components/AuthLayout';
 import { Link } from 'react-router'
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { registerAccount } from "../lib/auth";
-import type { Profile } from "../lib/types";
-
-interface CadastroProps {
-  onRegister: (profile: Profile) => void;
-}
-
-function Cadastro({ onRegister }: CadastroProps) {
+function Cadastro() {
   const navigate = useNavigate();
 
   const [nome, setNome] = useState("");
@@ -17,6 +12,8 @@ function Cadastro({ onRegister }: CadastroProps) {
   const [confirmarSenha, setConfirmarSenha] = useState("");
 
   const [erro, setErro] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -40,8 +37,8 @@ function Cadastro({ onRegister }: CadastroProps) {
       return;
     }
 
-    if (senha.trim().length < 8) {
-      setErro("A senha deve possuir pelo menos 8 caracteres e não pode conter apenas espaços.");
+    if (senha.trim().length < 6) {
+      setErro("A senha deve possuir pelo menos 6 caracteres e não pode conter apenas espaços.");
       return;
     }
 
@@ -50,23 +47,20 @@ function Cadastro({ onRegister }: CadastroProps) {
       return;
     }
 
+    if (busy) return;
+    setBusy(true);
     try {
       await registerAccount({ name: nome.trim(), email: email.trim().toLowerCase() }, senha);
-    } catch {
-      setErro("N?o foi poss?vel salvar o cadastro nesta aba. Tente novamente.");
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : "Não foi possível salvar o cadastro nesta aba. Tente novamente.");
       return;
-    }
+    } finally { setBusy(false); }
 
-    onRegister({
-      name: nome.trim(),
-      email: email.trim().toLowerCase(),
-    });
-
-    navigate("/login");
+    navigate("/login", { replace: true, state: { registered: true } });
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <AuthLayout>
       <div className="w-full max-w-md">
 
         <Link to="/" className="text-sm">
@@ -81,7 +75,7 @@ function Cadastro({ onRegister }: CadastroProps) {
           Comece a construir hábitos consistentes.
         </p>
         <p className="mt-3 text-sm text-gray-500">
-          Modo demonstração: use dados fictícios. As senhas não são armazenadas.
+          Modo demonstração: use dados fictícios. Sua conta e seus hábitos ficam salvos neste navegador.
         </p>
 
         <form
@@ -97,6 +91,8 @@ function Cadastro({ onRegister }: CadastroProps) {
               type="text"
               id="cadastro-nome"
               autoComplete="name"
+              required
+              maxLength={80}
               value={nome}
               onChange={(e) => setNome(e.target.value)}
               placeholder="Seu nome"
@@ -111,6 +107,8 @@ function Cadastro({ onRegister }: CadastroProps) {
               type="email"
               id="cadastro-email"
               autoComplete="email"
+              required
+              maxLength={254}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="seu@email.com"
@@ -122,8 +120,10 @@ function Cadastro({ onRegister }: CadastroProps) {
             <label htmlFor="cadastro-senha">Senha</label>
 
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               id="cadastro-senha"
+              required
+              minLength={6}
               autoComplete="new-password"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
@@ -136,8 +136,10 @@ function Cadastro({ onRegister }: CadastroProps) {
             <label htmlFor="cadastro-confirmar">Confirmar senha</label>
 
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               id="cadastro-confirmar"
+              required
+              minLength={6}
               autoComplete="new-password"
               value={confirmarSenha}
               onChange={(e) =>
@@ -148,6 +150,7 @@ function Cadastro({ onRegister }: CadastroProps) {
             />
           </div>
 
+          <button type="button" className="text-sm font-semibold text-violet-600" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Ocultar senha" : "Mostrar senha"}</button>
           {erro && (
             <div role="alert" className="border border-red-500 bg-red-50 text-red-700 p-3 rounded-lg">
               {erro}
@@ -155,10 +158,10 @@ function Cadastro({ onRegister }: CadastroProps) {
           )}
 
           <button
-            type="submit"
-            className="w-full p-3 rounded-lg bg-black text-white"
+            type="submit" disabled={busy}
+            className="primary w-full"
           >
-            Criar conta
+            {busy ? 'Criando conta…' : 'Criar conta'}
           </button>
         </form>
 
@@ -173,7 +176,7 @@ function Cadastro({ onRegister }: CadastroProps) {
         </p>
 
       </div>
-    </div>
+    </AuthLayout>
   );
 }
 

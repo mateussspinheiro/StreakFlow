@@ -1,40 +1,88 @@
-import { Link, useNavigate, useOutletContext } from 'react-router'
+﻿import { Link, useNavigate, useOutletContext } from 'react-router'
 import { useEffect, useState } from 'react'
-import type { Habit } from '../lib/types'
+import type { CheckIn, CheckInInput, Habit } from '../lib/types'
 import type { DashboardContext } from '../lib/dashboard'
-import { read, save } from '../lib/storage'
-import HabitForm from '../components/HabitForm'
-import ProfileForm from '../components/ProfileForm'
+import { dateKey, streak } from '../lib/habits'
+import { deleteHabit, exportData as getExportData, getIndicators, getState, habitDates, removeCheckIn, saveCheckIn, saveHabit, saveSettings } from '../lib/streakflow'
+import { useStreakFlow } from '../lib/useStreakFlow'
+import { formatDate } from '../lib/checkins'
+import HabitForm from './HabitForm'
+import ProfileForm from './ProfileForm'
+import SettingsForm from './SettingsForm'
+import DayOverview from './DayOverview'
+import HabitList from './HabitList'
+import HistoryPanel from './HistoryPanel'
+import ProgressPanel from './ProgressPanel'
+import CheckInForm from './CheckInForm'
+import Feedback from './Feedback'
+import Modal from './Modal'
+import EmptyState from './EmptyState'
 
-const menu = [['dashboard', '▦', 'Dashboard'], ['habitos', '✓', 'Meus hábitos'], ['historico', '↻', 'Histórico'], ['progresso', '▥', 'Progresso'], ['perfil', '◯', 'Meu perfil'], ['configuracoes', '⚙', 'Configurações']]
-const initialHabits: Habit[] = ['Beber 2L de água', 'Estudar programação', 'Praticar exercícios', 'Ler por 30 minutos', 'Meditar'].map((title, id) => ({ id, title, category: ['Saúde', 'Estudos', 'Fitness', 'Desenvolvimento', 'Bem-estar'][id], completed: false }))
+const pages: Record<string, [string, string]> = {
+  dashboard: ['Visão geral', 'Sua rotina, um dia de cada vez.'],
+  habitos: ['Meus hábitos', 'Organize o que importa. Encontre seu ritmo.'],
+  historico: ['Histórico', 'O contexto também faz parte do progresso.'],
+  progresso: ['Meu progresso', 'Uma visão real da sua consistência.'],
+  perfil: ['Meu perfil', 'Sua identidade, sua jornada.'],
+  configuracoes: ['Configurações', 'Uma experiência que acompanha seu ritmo.'],
+}
 
 export default function DashboardContent({ route }: { route: string }) {
   const { profile, onProfileChange } = useOutletContext<DashboardContext>()
   const navigate = useNavigate()
-  const [habits, setHabits] = useState<Habit[]>(() => read('habits', initialHabits))
+  const { habits, completions, settings, user } = useStreakFlow()
   const [notice, setNotice] = useState('')
-  useEffect(() => { save('habits', habits) }, [habits])
- useEffect(() => {
-    document.title = `${menu.find(item => item[0] === route)?.[2] || 'StreakFlow'} | StreakFlow`
-  }, [route])
-  const completed = habits.filter(h => h.completed).length
-  const progress = habits.length ? Math.round(completed / habits.length * 100) : 0
+  const [error, setError] = useState('')
+  const [now, setNow] = useState(() => new Date())
+  const [checkIn, setCheckIn] = useState<{ habit: Habit; record?: CheckIn } | null>(null)
+  const [deleting, setDeleting] = useState<Habit | null>(null)
+  const [deleteError, setDeleteError] = useState('')
+  const [pulse, setPulse] = useState(0)
+  const [celebrating, setCelebrating] = useState(false)
+  useEffect(() => {
+    const update = () => setNow(new Date())
+    const timer = window.setInterval(update, 30000)
+    window.addEventListener('focus', update)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', update) }
+  }, [])
+  useEffect(() => { document.title = `${pages[route]?.[0] || 'Hábito'} | StreakFlow` }, [route])
+  const today = dateKey(now)
+  const { bestStreak, checkIns } = getIndicators({ habits, completions }, now)
   const editing = route.startsWith('editar-habito/') ? habits.find(h => h.id === Number(route.split('/')[1])) : undefined
-  const go = (page: string) => { navigate('/dashboard/' + page) }
-  const toggle = (id: number) => setHabits(current => current.map(h => h.id === id ? { ...h, completed: !h.completed } : h))
-  return (
-      <div className="mx-auto max-w-[1500px] space-y-7 p-5 sm:p-8">
-        {notice && <p role="status" className="rounded-xl bg-violet-100 p-4">{notice} <button aria-label="Fechar aviso" onClick={() => setNotice('')}>×</button></p>}
-        {route === 'dashboard' && <section className="flex flex-wrap items-center justify-between gap-6 rounded-[28px] bg-[#111827] p-8 text-white"><div><p className="mb-4 text-sm text-violet-300">Olá, {profile.name} 👋</p><h2 className="max-w-xl text-4xl font-bold">Seus hábitos constroem o seu <span className="text-violet-400">futuro.</span></h2><p className="mt-4 text-slate-400">Complete seus hábitos de hoje para manter o ritmo.</p></div><div className="rounded-full border-8 border-violet-500 p-7 text-center"><strong className="text-3xl">{progress}%</strong><p className="text-xs">{completed}/{habits.length} concluídos</p></div></section>}
-        {['dashboard', 'progresso'].includes(route) && <section className="grid gap-4 sm:grid-cols-3" aria-label="Resumo do progresso">{[['🎯', 'Hábitos ativos', habits.length], ['✅', 'Concluídos hoje', completed], ['⚡', 'Taxa de conclusão', `${progress}%`]].map(([icon, label, value]) => <article className="panel" key={label}><span className="text-2xl">{icon}</span><p className="mt-4 text-sm text-slate-500">{label}</p><p className="text-3xl font-bold">{value}</p></article>)}</section>}
-        {['dashboard', 'habitos'].includes(route) && <section className="panel"><div className="mb-6 flex justify-between"><h2 className="text-lg font-bold">Hábitos de hoje</h2>{route === 'dashboard' && <Link className="text-sm font-bold text-violet-600" to="/dashboard/habitos">Ver todos →</Link>}</div><div className="space-y-3">{habits.length === 0 && <p className="text-slate-500">Nenhum hábito cadastrado. Crie seu primeiro hábito!</p>}{habits.map(h => <article key={h.id} className={`flex items-center gap-3 rounded-2xl border p-4 ${h.completed ? 'border-emerald-100 bg-emerald-50/40' : 'border-slate-100'}`}><input aria-label={`Concluir ${h.title}`} type="checkbox" checked={h.completed} onChange={() => toggle(h.id)} className="h-6 w-6 accent-violet-600" /><div className="min-w-0 flex-1"><p className={`break-words font-semibold ${h.completed ? 'text-slate-400 line-through' : ''}`}>{h.title}</p><p className="text-xs text-slate-400">{h.category}</p></div><Link aria-label={`Editar ${h.title}`} to={`/dashboard/editar-habito/${h.id}`} className="p-2 text-violet-600">✎</Link><button aria-label={`Excluir ${h.title}`} className="p-2 text-red-500" onClick={() => { if (window.confirm(`Excluir “${h.title}”?`)) setHabits(current => current.filter(item => item.id !== h.id)) }}>×</button></article>)}</div><Link to="/dashboard/novo-habito" className="mt-4 block rounded-2xl border-2 border-dashed border-slate-200 p-4 text-center text-sm font-semibold text-violet-600">+ Adicionar novo hábito</Link></section>}
-        {['dashboard', 'historico'].includes(route) && <section className="panel"><h2 className="mb-2 text-lg font-bold">Conclusões desta sessão</h2><p className="mb-4 text-sm text-slate-500">Hábitos marcados como concluídos na demonstração.</p>{completed === 0 ? <p>Nenhum hábito concluído ainda.</p> : habits.filter(h => h.completed).map(h => <p key={h.id} className="border-b border-slate-100 py-3">✅ {h.title}<span className="float-right text-xs text-emerald-600">CONCLUÍDO</span></p>)}</section>}
-        {route === 'progresso' && <section className="panel"><h2 className="mb-4 text-lg font-bold">Seu progresso atual</h2><progress aria-label="Percentual de hábitos concluídos" value={progress} max="100" className="h-5 w-full accent-violet-600" /><p className="mt-4">{completed} de {habits.length} hábitos concluídos. {progress === 100 ? 'Parabéns! Você concluiu todos os hábitos.' : 'Cada pequeno passo conta.'}</p></section>}
-        {(route === 'novo-habito' || editing) && <HabitForm key={route} habit={editing} onSave={(title, category) => { setHabits(current => editing ? current.map(h => h.id === editing.id ? { ...h, title, category } : h) : [...current, { id: Date.now(), title, category, completed: false }]); go('habitos') }} />}
-        {route === 'perfil' && <ProfileForm profile={profile} onSave={next => { onProfileChange(next); setNotice('Perfil atualizado com sucesso.') }} />}
-        {route === 'configuracoes' && <section className="panel"><h2 className="text-lg font-bold">Sobre esta demonstração</h2><p className="mt-3 text-slate-600">Os hábitos e o perfil ficam disponíveis nesta aba durante a sessão. As senhas não são armazenadas. O acesso com Google e a recuperação de senha dependem de um serviço de autenticação.</p><Link to="/dashboard/perfil" className="mt-5 inline-block font-semibold text-violet-600">Editar meu perfil →</Link></section>}
-        {!menu.some(item => item[0] === route) && route !== 'novo-habito' && !editing && <section className="panel"><h2 className="text-xl font-bold">Página ou hábito não encontrado</h2><Link to="/dashboard" className="text-violet-600">Voltar ao dashboard</Link></section>}
-      </div>
-  )
+  const greeting = now.getHours() < 12 ? 'Bom dia' : now.getHours() < 18 ? 'Boa tarde' : 'Boa noite'
+  function saveRecord(input: CheckInInput) {
+    const before = streak(habitDates(completions, input.habitId), now)
+    saveCheckIn(input)
+    const after = streak(habitDates(getState().completions, input.habitId), now)
+    if (after > before) setPulse(value => value + 1)
+    setCelebrating(after > before)
+    setCheckIn(null)
+    setError('')
+    setNotice(input.status === 'completed' ? `Check-in registrado. Sua sequência neste hábito é de ${after} ${after === 1 ? 'dia' : 'dias'}.` : 'Check-in registrado. Você pode revisá-lo quando precisar.')
+  }
+  function exportData() {
+    try {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(getExportData(), null, 2)], { type: 'application/json' }))
+      const anchor = document.createElement('a')
+      anchor.href = url; anchor.download = `streakflow-${today}.json`; anchor.click()
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+      setNotice('Arquivo de dados exportado.')
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Não foi possível exportar.') }
+  }
+  return <div className={`page-content ${settings.compact ? 'compact' : ''}`}>
+    <header className="page-heading"><div><p className="eyebrow">{route === 'dashboard' ? formatDate(today) : 'STREAKFLOW / SEU ESPAÇO'}</p><h1>{route === 'dashboard' ? `${greeting}, ${profile.name.split(' ')[0]}.` : pages[route]?.[0] || (editing ? 'Editar hábito' : route === 'novo-habito' ? 'Novo hábito' : 'Página não encontrada')}</h1><p className="muted">{pages[route]?.[1] || 'Uma ação simples, um passo possível.'}</p></div>{['dashboard', 'habitos'].includes(route) && <Link className="primary" to="/dashboard/novo-habito">+ Novo hábito</Link>}</header>
+    <Feedback message={notice} celebrate={celebrating && notice.startsWith('Check-in registrado.')} onClose={() => setNotice('')} />
+    <Feedback message={error} error onClose={() => setError('')} />
+    {route === 'dashboard' && <DayOverview habits={habits} records={completions} today={now} pulse={pulse} />}
+    {['dashboard', 'habitos'].includes(route) && <HabitList habits={habits} records={completions} today={today} summary={route === 'dashboard'} onCheckIn={(habit, record) => setCheckIn({ habit, record })} onDelete={habit => { setDeleteError(''); setDeleting(habit) }} />}
+    {route === 'historico' && <HistoryPanel habits={habits} records={completions} today={today} onEdit={(habit, record) => setCheckIn({ habit, record })} />}
+    {route === 'progresso' && <ProgressPanel habits={habits} records={completions} settings={settings} today={today} />}
+    {(route === 'novo-habito' || editing) && <HabitForm key={route} habit={editing} onSave={input => { saveHabit(input, editing?.id); navigate('/dashboard/habitos') }} />}
+    {route === 'perfil' && <div className="profile-grid"><section className="panel profile-card"><div className="avatar">{profile.name.slice(0, 1).toUpperCase()}</div><h2>{profile.name}</h2><p className="muted break-all">{profile.email}</p><span className="badge">{user?.joinedAt ? `Por aqui desde ${formatDate(user.joinedAt)}` : 'Conta anterior · data de entrada não registrada'}</span><div className="profile-numbers"><div><strong>{habits.length}</strong><span>hábitos</span></div><div><strong>{checkIns}</strong><span>registros</span></div><div><strong>{bestStreak}</strong><span>melhor streak</span></div></div></section><ProfileForm profile={profile} onSave={next => { onProfileChange(next); setNotice('Perfil atualizado. Use o e-mail atualizado no próximo acesso.') }} /></div>}
+    {route === 'configuracoes' && <div className="settings-stack"><section className="panel"><h2>Conta</h2><p className="muted mt-3">{profile.name} · {profile.email}</p><Link className="text-link" to="/dashboard/perfil">Editar dados básicos →</Link></section><SettingsForm key={JSON.stringify(settings)} settings={settings} onSave={next => { saveSettings(next); setNotice('Preferências salvas.') }} /><section className="panel"><h2>Sobre seus dados</h2><p className="muted mt-3 mb-5">Seus dados estão armazenados neste navegador nesta versão do StreakFlow. Não há sincronização entre dispositivos. Exporte uma cópia do perfil, hábitos, check-ins e preferências. Credenciais não são incluídas.</p><button className="secondary" onClick={exportData}>Exportar meus dados</button><br /><Link className="text-link" to="/privacidade">Privacidade e armazenamento →</Link></section></div>}
+    {!pages[route] && route !== 'novo-habito' && !editing && <section className="panel"><EmptyState title="Página ou hábito não encontrado" text="O endereço pode ter mudado ou o hábito pode ter sido excluído." /><Link className="text-link" to="/dashboard/habitos">Voltar aos hábitos →</Link></section>}
+    {checkIn && <CheckInForm habit={checkIn.habit} record={checkIn.record} onClose={() => setCheckIn(null)} onSave={saveRecord} onRemove={id => { removeCheckIn(id); setCheckIn(null); setNotice('Check-in removido. Seu progresso foi recalculado.') }} />}
+    {deleting && <Modal title="Excluir hábito?" onClose={() => setDeleting(null)}><p className="muted">“{deleting.title}” e todos os seus check-ins serão removidos. Esta ação não pode ser desfeita.</p><Feedback message={deleteError} error onClose={() => setDeleteError('')} /><div className="form-actions mt-5"><button className="secondary" onClick={() => setDeleting(null)}>Manter hábito</button><button className="danger-button" onClick={() => { try { deleteHabit(deleting.id); setDeleting(null); setNotice('Hábito excluído.') } catch (cause) { setDeleteError(cause instanceof Error ? cause.message : 'Não foi possível excluir.') } }}>Excluir hábito</button></div></Modal>}
+    <footer className="page-footer">StreakFlow · Um dia de cada vez.</footer>
+  </div>
 }

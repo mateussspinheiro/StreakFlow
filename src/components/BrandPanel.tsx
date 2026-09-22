@@ -1,27 +1,14 @@
+import BrandLogo from './BrandLogo'
+import Icon from './Icon'
+
 function BrandPanel() {
   return (
-    <section className="relative hidden overflow-hidden bg-[#111827] lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
+    <section className="brand-panel relative hidden overflow-hidden bg-[#111827] lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
 
       <div className="absolute -left-28 -top-28 h-96 w-96 rounded-full bg-violet-600/30 blur-3xl" />
       <div className="absolute -bottom-32 -right-24 h-[430px] w-[430px] rounded-full bg-fuchsia-600/20 blur-3xl" />
 
-      <div className="relative z-10 flex items-center gap-3">
-
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-600 shadow-lg shadow-violet-600/30">
-          <span className="text-2xl">🔥</span>
-        </div>
-
-        <div>
-          <h1 className="text-xl font-bold text-white">
-            StreakFlow
-          </h1>
-
-          <p className="text-xs text-slate-400">
-            Construa hábitos. Evolua todos os dias.
-          </p>
-        </div>
-
-      </div>
+      <div className="relative z-10"><BrandLogo /></div>
 
       <div className="relative z-10 max-w-xl">
 
@@ -50,21 +37,21 @@ function BrandPanel() {
         <div className="mt-10 grid grid-cols-3 gap-4">
 
           <MiniCard
-            icon="🔥"
-            value="12"
-            label="Dias de sequência"
+            icon="target"
+            value="Crie"
+            label="Hábitos com intenção"
           />
 
           <MiniCard
-            icon="✓"
-            value="84%"
-            label="Taxa de conclusão"
+            icon="check"
+            value="Conclua"
+            label="Um passo por dia"
           />
 
           <MiniCard
-            icon="⚡"
-            value="480"
-            label="Pontos conquistados"
+            icon="chart"
+            value="Evolua"
+            label="Acompanhe seu ritmo"
           />
 
         </div>
@@ -84,7 +71,7 @@ function MiniCard({
   value,
   label,
 }: {
-  icon: string
+  icon: 'target' | 'check' | 'chart'
   value: string
   label: string
 }) {
@@ -92,7 +79,7 @@ function MiniCard({
     <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
 
       <div className="mb-3 text-2xl">
-        {icon}
+        <Icon name={icon} className="text-violet-300" />
       </div>
 
       <p className="text-2xl font-bold text-white">
