@@ -1,22 +1,20 @@
 import AuthLayout from '../components/AuthLayout';
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
-import { validateAccount } from '../lib/auth';
-import type { Profile } from '../lib/types';
+import { useAuth } from '../lib/useAuth';
+import { authError, returnDestination } from '../lib/authErrors';
 
-interface LoginProps {
-  onEnter: (profile: Profile) => void;
-}
-
-function Login({ onEnter }: LoginProps) {
+function Login() {
+  const { signIn, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(location.state?.email ?? "");
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const submitting = useRef(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -35,22 +33,31 @@ function Login({ onEnter }: LoginProps) {
       return;
     }
 
-    if (busy) return;
+    if (submitting.current || isLoading) return;
+    submitting.current = true;
     setBusy(true);
     try {
-      const usuario = await validateAccount(email, senha);
-      if (!usuario) {
-        setErro("E-mail ou senha incorretos. Se ainda não tem conta neste navegador, faça seu cadastro.");
+      const result = await signIn(email, senha);
+      if (result.nextStep.signInStep === 'CONFIRM_SIGN_UP') {
+        navigate('/confirmar-email', { state: { email, from: location.state?.from } });
         return;
       }
-      onEnter(usuario);
-    } catch {
-      setErro("Não foi possível validar o login. Tente novamente.");
+      if (result.nextStep.signInStep === 'RESET_PASSWORD') {
+        navigate('/recuperar', { state: { email, from: location.state?.from } });
+        return;
+      }
+      if (!result.isSignedIn) {
+        setErro('Esta conta exige uma etapa adicional de acesso. Entre em contato com o suporte.');
+        return;
+      }
+    } catch (error) {
+      if ((error as { name?: string })?.name === 'UserNotConfirmedException') {
+        navigate('/confirmar-email', { state: { email, from: location.state?.from } });
+      } else setErro(authError(error));
       return;
-    } finally { setBusy(false); }
+    } finally { submitting.current = false; setBusy(false); }
 
-    const from = location.state?.from;
-    const destination = typeof from === 'string' && /^\/(?:dashboard(?:\/[^?#\\]*)?|meus-habitos\/?|historico\/?|progresso\/?)(?:[?#][^\\]*)?$/.test(from) ? from : '/dashboard';
+    const destination = returnDestination(location.state?.from);
     navigate(destination, { replace: true });
   }
 
@@ -70,7 +77,7 @@ function Login({ onEnter }: LoginProps) {
         <p className="text-gray-500 mt-2">
           Continue evoluindo um dia de cada vez.
         </p>
-        {location.state?.registered === true && <p role="status" className="notice mt-5">Conta criada com sucesso! Entre com seu e-mail e senha.</p>}
+        {location.state?.message && <p role="status" className="notice mt-5">{location.state.message}</p>}
 
         <form
           onSubmit={handleSubmit}
@@ -79,12 +86,14 @@ function Login({ onEnter }: LoginProps) {
           className="space-y-5 mt-8"
         >
 
+          <fieldset disabled={busy || isLoading} className="space-y-5" aria-describedby={erro ? "login-error" : undefined}>
           <div>
             <label htmlFor="login-email">E-mail</label>
 
             <input
               type="email"
               id="login-email"
+              aria-describedby={erro ? 'login-error' : undefined}
               autoComplete="email"
               required
               value={email}
@@ -102,6 +111,7 @@ function Login({ onEnter }: LoginProps) {
             <input
               type={showPassword ? "text" : "password"}
               id="login-senha"
+              aria-describedby={erro ? 'login-error' : undefined}
               autoComplete="current-password"
               required
               value={senha}
@@ -115,7 +125,7 @@ function Login({ onEnter }: LoginProps) {
 
           <button type="button" className="text-sm font-semibold text-violet-600" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Ocultar senha" : "Mostrar senha"}</button>
           {erro && (
-            <div role="alert" className="border border-red-500 bg-red-50 text-red-700 p-3 rounded-lg">
+            <div id="login-error" role="alert" className="border border-red-500 bg-red-50 text-red-700 p-3 rounded-lg">
               {erro}
             </div>
           )}
@@ -127,12 +137,14 @@ function Login({ onEnter }: LoginProps) {
             {busy ? 'Entrando…' : 'Entrar'}
           </button>
 
+          </fieldset>
         </form>
+        <Link to="/recuperar" state={{ email, from: location.state?.from }} className="text-link">Esqueci minha senha</Link>
 
         <p className="text-center mt-6">
           Ainda não possui uma conta?{" "}
           <Link
-            to="/cadastro"
+            to="/cadastro" state={{ from: location.state?.from }}
             className="font-semibold underline"
           >
             Cadastre-se

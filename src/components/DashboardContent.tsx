@@ -19,6 +19,7 @@ import CheckInForm from './CheckInForm'
 import Feedback from './Feedback'
 import Modal from './Modal'
 import EmptyState from './EmptyState'
+import ConsistencyHeatmap from './ConsistencyHeatmap'
 
 const pages: Record<string, [string, string]> = {
   dashboard: ['Visão geral', 'Sua rotina, um dia de cada vez.'],
@@ -30,9 +31,9 @@ const pages: Record<string, [string, string]> = {
 }
 
 export default function DashboardContent({ route }: { route: string }) {
-  const { profile, onProfileChange } = useOutletContext<DashboardContext>()
+  const { profile } = useOutletContext<DashboardContext>()
   const navigate = useNavigate()
-  const { habits, completions, settings, user } = useStreakFlow()
+  const { habits, completions, settings } = useStreakFlow()
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
   const [now, setNow] = useState(() => new Date())
@@ -85,10 +86,11 @@ export default function DashboardContent({ route }: { route: string }) {
     <Feedback message={error} error onClose={() => setError('')} />
     {route === 'dashboard' && <DayOverview habits={habits} records={completions} today={now} pulse={pulse} />}
     {['dashboard', 'habitos'].includes(route) && <HabitList habits={habits} records={completions} today={today} summary={route === 'dashboard'} onQuickCheckIn={quickCheckIn} onCheckIn={(habit, record) => setCheckIn({ habit, record })} onDelete={habit => { setDeleteError(''); setDeleting(habit) }} />}
+    {route === 'dashboard' && <ConsistencyHeatmap habits={habits} records={completions} settings={settings} today={today} compact />}
     {route === 'historico' && <HistoryPanel habits={habits} records={completions} today={today} onEdit={(habit, record) => setCheckIn({ habit, record })} />}
     {route === 'progresso' && <ProgressPanel habits={habits} records={completions} settings={settings} today={today} />}
     {(route === 'novo-habito' || editing) && <HabitForm key={route} habit={editing} onSave={input => { saveHabit(input, editing?.id); navigate('/meus-habitos') }} />}
-    {route === 'perfil' && <div className="profile-grid"><section className="panel profile-card"><div className="avatar">{profile.name.slice(0, 1).toUpperCase()}</div><h2>{profile.name}</h2><p className="muted break-all">{profile.email}</p><span className="badge">{user?.joinedAt ? `Por aqui desde ${formatDate(user.joinedAt)}` : 'Conta anterior · data de entrada não registrada'}</span><div className="profile-numbers"><div><strong>{habits.length}</strong><span>hábitos</span></div><div><strong>{checkIns}</strong><span>registros</span></div><div><strong>{bestStreak}</strong><span>melhor streak</span></div></div></section><ProfileForm profile={profile} onSave={next => { onProfileChange(next); setNotice('Perfil atualizado. Use o e-mail atualizado no próximo acesso.') }} /></div>}
+    {route === 'perfil' && <div className="profile-grid"><section className="panel profile-card"><div className="avatar">{profile.name.slice(0, 1).toUpperCase()}</div><h2>{profile.name}</h2><p className="muted break-all">{profile.email}</p><span className="badge">Conta Cognito</span><div className="profile-numbers"><div><strong>{habits.length}</strong><span>hábitos</span></div><div><strong>{checkIns}</strong><span>registros</span></div><div><strong>{bestStreak}</strong><span>melhor streak</span></div></div></section><ProfileForm profile={profile} onSaved={() => setNotice('Perfil atualizado.')} /></div>}
     {route === 'configuracoes' && <div className="settings-stack"><section className="panel"><h2>Conta</h2><p className="muted mt-3">{profile.name} · {profile.email}</p><Link className="text-link" to="/dashboard/perfil">Editar dados básicos →</Link></section><SettingsForm key={JSON.stringify(settings)} settings={settings} onSave={next => { saveSettings(next); setNotice('Preferências salvas.') }} /><section className="panel"><h2>Sobre seus dados</h2><p className="muted mt-3 mb-5">Seus dados estão armazenados neste navegador nesta versão do StreakFlow. Não há sincronização entre dispositivos. Exporte uma cópia do perfil, hábitos, check-ins e preferências. Credenciais não são incluídas.</p><button className="secondary" onClick={exportData}>Exportar meus dados</button><br /><Link className="text-link" to="/privacidade">Privacidade e armazenamento →</Link></section></div>}
     {!pages[route] && route !== 'novo-habito' && !editing && <section className="panel"><EmptyState title="Página ou hábito não encontrado" text="O endereço pode ter mudado ou o hábito pode ter sido excluído." /><Link className="text-link" to="/meus-habitos">Voltar aos hábitos →</Link></section>}
     {checkIn && <CheckInForm habit={checkIn.habit} record={checkIn.record} onClose={() => setCheckIn(null)} onSave={saveRecord} onRemove={id => { removeCheckIn(id); setCheckIn(null); setNotice('Check-in removido. Seu progresso foi recalculado.') }} />}

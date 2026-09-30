@@ -2,7 +2,7 @@
 import { dateKey, isDateKey, weekDays } from './habits'
 import { addValues, calculateProgressPercentage, getCheckInStatus, getTracking, isNumericTracking, validateTracking, validateValue } from './tracking'
 import { getHabitStreaks, isPlannedRest } from './consistency'
-import { hasStoredSession, readLegacy, readStored, removeSession, STORAGE_KEYS, writeStored } from './storage'
+import { readLegacy, readStored, STORAGE_KEYS, writeStored } from './storage'
 
 export const DEFAULT_SETTINGS: Settings = {
   compact: false,
@@ -60,11 +60,11 @@ function migrateLegacy(): StreakFlowData {
   const validated = validateData(next)
   if (account || rawHabits || next.settings.compact) {
     writeStored('data', validated)
-    if (validated.user && readLegacy('session') === true) writeStored('session', true)
   }
   return validated
 }
 
+let authenticatedUser: (Profile & { sub: string }) | null = null
 let snapshot: StreakFlowState | undefined
 const listeners = new Set<() => void>()
 
@@ -73,7 +73,7 @@ export function getState(): StreakFlowState {
   try {
     const stored = readStored('data')
     const data = stored === null ? migrateLegacy() : validateData(stored)
-    snapshot = { ...data, authenticated: !!data.user && hasStoredSession(), storageError: null }
+    snapshot = { ...data, authenticated: !!authenticatedUser, storageError: null }
   } catch {
     snapshot = { ...emptyData(), authenticated: false, storageError: 'Não foi possível carregar os dados locais. O armazenamento pode estar bloqueado ou conter dados inválidos. Os dados originais foram preservados; verifique o navegador e tente novamente.' }
   }
@@ -92,7 +92,7 @@ export function refreshState() {
 }
 
 function onStorage(event: StorageEvent) {
-  if (event.key === null || event.key === STORAGE_KEYS.data || event.key === STORAGE_KEYS.session) refreshState()
+  if (event.key === null || event.key === STORAGE_KEYS.data) refreshState()
 }
 
 export function subscribe(listener: () => void) {
@@ -111,10 +111,10 @@ function writableState() {
 }
 
 function commit(data: StreakFlowData) {
-  const current = writableState()
+  writableState()
   const next = validateData(data)
   writeStored('data', next)
-  publish({ ...next, authenticated: current.authenticated, storageError: null })
+  publish({ ...next, authenticated: !!authenticatedUser, storageError: null })
 }
 
 export function validateProfile(profile: Profile): Profile {
@@ -125,32 +125,10 @@ export function validateProfile(profile: Profile): Profile {
   return { name, email }
 }
 
-export function getUser() { return writableState().user }
-
-export function createUser(user: User) {
-  const current = writableState()
-  if (current.user) throw new Error('Já existe uma conta neste navegador. Entre com seu cadastro existente.')
-  // Cadastro não faz login nem herda uma marca de sessão sem conta associada.
-  removeSession()
-  commit({ ...current, user: { ...user, profile: validateProfile(user.profile), joinedAt: dateKey() } })
-}
-
-export function updateProfile(profile: Profile) {
-  const current = writableState()
-  if (!current.user || !current.authenticated) throw new Error('Entre na sua conta para editar o perfil.')
-  commit({ ...current, user: { ...current.user, profile: validateProfile(profile) } })
-}
-
-export function startSession() {
-  const current = writableState()
-  if (!current.user) throw new Error('Crie uma conta antes de entrar.')
-  writeStored('session', true)
-  publish({ ...current, authenticated: true })
-}
-
-export function endSession() {
-  removeSession()
-  publish({ ...getState(), authenticated: false })
+// Estado em memoria recebido do servico Cognito. Nunca persistido.
+export function setAuthenticatedUser(user: (Profile & { sub: string }) | null) {
+  authenticatedUser = user
+  publish({ ...getState(), authenticated: !!user })
 }
 
 function authenticatedState() {
@@ -310,5 +288,5 @@ export function weeklyProgress(habit: Habit, completions: Completion[], settings
 
 export function exportData() {
   const { user, habits, completions, settings } = writableState()
-  return { version: 3, exportedAt: new Date().toISOString(), profile: user?.profile, joinedAt: user?.joinedAt, habits, completions, settings }
+  return { version: 3, exportedAt: new Date().toISOString(), profile: authenticatedUser ? { name: authenticatedUser.name, email: authenticatedUser.email } : user?.profile, joinedAt: user?.joinedAt, habits, completions, settings }
 }

@@ -1,7 +1,11 @@
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router";
 import { useEffect, useState } from 'react';
-import { endSession, refreshState, startSession, updateProfile } from './lib/streakflow';
+import { refreshState } from './lib/streakflow';
 import { useStreakFlow } from './lib/useStreakFlow';
+import { useAuth } from './lib/useAuth';
+import { authError, returnDestination } from './lib/authErrors';
+import ConfirmarEmail from './pages/ConfirmarEmail';
+import RecuperarSenha from './pages/RecuperarSenha';
 import { useTheme } from './lib/useTheme';
 import DashboardContent from './components/DashboardContent';
 import AuthLayout from './components/AuthLayout';
@@ -30,30 +34,31 @@ function LegacyRedirect({ to }: { to: string }) {
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { authenticated: session, user, storageError, settings } = useStreakFlow();
+  const { storageError, settings } = useStreakFlow();
+  const { isAuthenticated: session, user, isLoading, error: authIssue, signOut, checkSession } = useAuth();
   useTheme(settings.theme);
-  const profile = user?.profile ?? { name: 'Visitante', email: '' };
+  const profile = user ?? { name: 'Visitante', email: '' };
   const [error, setError] = useState('');
 
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
   useEffect(() => {
-    const titles: Record<string, string> = { '/': 'Um dia de cada vez', '/login': 'Entrar', '/cadastro': 'Criar conta', '/termos': 'Termos', '/privacidade': 'Privacidade', '/recuperar': 'Recuperar senha' };
+    const titles: Record<string, string> = { '/': 'Um dia de cada vez', '/login': 'Entrar', '/cadastro': 'Criar conta', '/termos': 'Termos', '/privacidade': 'Privacidade', '/recuperar': 'Recuperar senha', '/confirmar-email': 'Confirmar e-mail' };
     if (titles[location.pathname]) document.title = `${titles[location.pathname]} | StreakFlow`;
   }, [location.pathname]);
 
-  function logout() {
+  async function logout() {
     try {
-      endSession();
+      await signOut();
       setError('');
       navigate('/login', { replace: true });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Não foi possível sair. Tente novamente.');
+      setError(authError(cause));
     }
   }
 
   return (
     <>
-    {(storageError || error) && <div role="alert" className="storage-alert">{storageError || error}<button className="secondary" onClick={() => { setError(''); refreshState(); }}>Tentar novamente</button></div>}
+    {(storageError || error || authIssue) && <div role="alert" className="storage-alert">{storageError || error || authIssue}<button className="secondary" onClick={() => { setError(''); refreshState(); void checkSession(); }}>Tentar novamente</button></div>}
     <Routes>
       {/* PÁGINAS PÚBLICAS */}
 
@@ -64,7 +69,7 @@ function App() {
 
       <Route
         path="/login"
-        element={session ? <Navigate to="/dashboard" replace /> : <Login onEnter={startSession} />}
+        element={session ? <Navigate to={returnDestination(location.state?.from)} replace /> : <Login />}
       />
 
       <Route
@@ -76,8 +81,8 @@ function App() {
 
       <Route
         element={
-          <ProtectedRoute authenticated={session}>
-            <DashboardLayout profile={profile} onProfileChange={updateProfile} onLogout={logout} />
+          <ProtectedRoute authenticated={session} isLoading={isLoading}>
+            <DashboardLayout profile={profile} onLogout={logout} />
           </ProtectedRoute>
         }
       >
@@ -115,7 +120,9 @@ function App() {
         <Route path="/dashboard/*" element={<NotFound />} />
       </Route>
 
-      {['recuperar', 'termos', 'privacidade'].map(page => (
+      <Route path="/confirmar-email" element={<ConfirmarEmail />} />
+      <Route path="/recuperar" element={<RecuperarSenha />} />
+      {['termos', 'privacidade'].map(page => (
         <Route key={page} path={`/${page}`} element={<AuthLayout><AuthForm key={page} route={page} /></AuthLayout>} />
       ))}
       {Object.entries({

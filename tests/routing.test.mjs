@@ -16,6 +16,8 @@ function routes(authenticated, pathname = '/', search = '', hash = '') {
     if (name === 'react') return { ...React, useEffect: () => {}, useState: value => [value, () => {}] }
     if (name === 'react-router') return { ...router, useLocation: () => ({ pathname, search, hash }), useNavigate: () => () => {} }
     if (name.endsWith('/useStreakFlow')) return { useStreakFlow: () => ({ authenticated, user: { profile: { name: 'Teste', email: 'teste@example.com' } }, settings: { theme: 'system' } }) }
+    if (name.endsWith('/useAuth')) return { useAuth: () => ({ isAuthenticated: authenticated, isLoading: false, user: { name: 'Teste', email: 'teste@example.com' } }) }
+    if (name.endsWith('/authErrors')) return { returnDestination: () => '/dashboard' }
     if (name.endsWith('/useTheme')) return { useTheme: () => {} }
     if (name.endsWith('/streakflow')) return {}
     const component = () => null
@@ -45,7 +47,7 @@ test('URLs principais resolvem páginas reais e preservam proteção de toda a �
       assert.equal(guard.route.element.props.children.type.displayName, 'DashboardLayout')
     }
   }
-  for (const [path, page] of Object.entries({ '/': 'Landing', '/login': 'Login', '/cadastro': 'Cadastro' })) {
+  for (const [path, page] of Object.entries({ '/': 'Landing', '/login': 'Login', '/cadastro': 'Cadastro', '/confirmar-email': 'ConfirmarEmail', '/recuperar': 'RecuperarSenha' })) {
     assert.equal(router.matchRoutes(routes(false), path).at(-1).route.element.type.displayName, page)
   }
   for (const path of ['/login', '/cadastro']) {

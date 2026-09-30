@@ -7,6 +7,7 @@ import { getInsights } from '../lib/insights'
 import { Stat } from './DayOverview'
 import EmptyState from './EmptyState'
 import { Mascot } from './BrandLogo'
+import ConsistencyHeatmap from './ConsistencyHeatmap'
 
 export default function ProgressPanel({ habits, records, settings, today }: { habits: Habit[]; records: CheckIn[]; settings: Settings; today: string }) {
   const [period, setPeriod] = useState(7)
@@ -15,6 +16,7 @@ export default function ProgressPanel({ habits, records, settings, today }: { ha
   const { mostConsistent, messages } = getInsights(habits, records, now)
   const days = previousDays(period, now)
   return <>
+    <ConsistencyHeatmap habits={habits} records={records} settings={settings} today={today} />
     <section className="stats-grid"><Stat icon="history" label="Total de check-ins" value={checkIns} detail={`${total} concluídos`} /><Stat icon="check" label="Taxa de conclusão" value={completionRate === null ? '—' : `${completionRate}%`} detail="Concluídos ÷ registros sem descanso" /><Stat icon="flame" label="Streak atual" value={`${currentStreak} dias`} detail={`Melhor streak: ${bestStreak} dias`} /></section>
     <section className="panel insights-panel"><div><p className="eyebrow">SUA ROTINA EM PERSPECTIVA</p><h2>{mostConsistent ? `Mais consistente: ${mostConsistent.habit.title}` : 'Cada registro ajuda a entender seu ritmo'}</h2></div>{messages.length ? <ul>{messages.map(message => <li key={message}>{message}</li>)}</ul> : <p className="muted">Continue registrando seus hábitos para desbloquear mais informações sobre sua rotina.</p>}</section>
     {!records.length ? <section className="panel"><EmptyState title="Ainda não temos dados suficientes." text="Continue registrando seus hábitos para visualizar sua evolução." createHabit={!habits.length} /></section> : <section className="panel"><div className="section-heading"><div><h2>Progresso recente</h2><p className="muted">Conclusões por dia, entre os hábitos existentes naquela data.</p></div><label>Período<select value={period} onChange={e => setPeriod(Number(e.target.value))}><option value={7}>Últimos 7 dias</option><option value={14}>Últimos 14 dias</option><option value={30}>Últimos 30 dias</option></select></label></div><div className={`chart ${period === 7 ? 'chart-week' : ''}`} role="list" aria-label="Conclusões por dia">{days.map(day => {

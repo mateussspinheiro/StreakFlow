@@ -1,10 +1,13 @@
 import AuthLayout from '../components/AuthLayout';
-import { Link } from 'react-router'
-import { useState, type FormEvent } from "react";
+import { Link, useLocation } from 'react-router'
+import { useRef, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { registerAccount } from "../lib/auth";
+import { useAuth } from '../lib/useAuth';
+import { authError, validPassword, passwordRequirements } from '../lib/authErrors';
 function Cadastro() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { signUp, isLoading } = useAuth();
 
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
@@ -14,6 +17,7 @@ function Cadastro() {
   const [erro, setErro] = useState("");
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const submitting = useRef(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,8 +41,8 @@ function Cadastro() {
       return;
     }
 
-    if (senha.trim().length < 6) {
-      setErro("A senha deve possuir pelo menos 6 caracteres e não pode conter apenas espaços.");
+    if (!validPassword(senha)) {
+      setErro(passwordRequirements);
       return;
     }
 
@@ -47,16 +51,16 @@ function Cadastro() {
       return;
     }
 
-    if (busy) return;
+    if (submitting.current || isLoading) return;
+    submitting.current = true;
     setBusy(true);
     try {
-      await registerAccount({ name: nome.trim(), email: email.trim().toLowerCase() }, senha);
+      const result = await signUp({ name: nome.trim(), email: email.trim().toLowerCase() }, senha);
+      navigate(result.nextStep.signUpStep === 'CONFIRM_SIGN_UP' ? '/confirmar-email' : '/login', { replace: true, state: { email: email.trim().toLowerCase(), from: location.state?.from, message: 'Conta criada. Faça login para continuar.' } });
     } catch (error) {
-      setErro(error instanceof Error ? error.message : "Não foi possível salvar o cadastro nesta aba. Tente novamente.");
+      setErro(authError(error));
       return;
-    } finally { setBusy(false); }
-
-    navigate("/login", { replace: true, state: { registered: true } });
+    } finally { submitting.current = false; setBusy(false); }
   }
 
   return (
@@ -75,7 +79,7 @@ function Cadastro() {
           Comece a construir hábitos consistentes.
         </p>
         <p className="mt-3 text-sm text-gray-500">
-          Modo demonstração: use dados fictícios. Sua conta e seus hábitos ficam salvos neste navegador.
+          Confirme seu e-mail para ativar sua conta. Seus hábitos continuam salvos neste navegador.
         </p>
 
         <form
@@ -84,12 +88,14 @@ function Cadastro() {
           onChange={() => setErro("")}
           className="mt-8 space-y-5"
         >
+          <fieldset disabled={busy || isLoading} className="space-y-5" aria-describedby={`password-requirements${erro ? ' cadastro-error' : ''}`}>
           <div>
             <label htmlFor="cadastro-nome">Nome</label>
 
             <input
               type="text"
               id="cadastro-nome"
+              aria-describedby={erro ? 'cadastro-error' : undefined}
               autoComplete="name"
               required
               maxLength={80}
@@ -106,6 +112,7 @@ function Cadastro() {
             <input
               type="email"
               id="cadastro-email"
+              aria-describedby={erro ? 'cadastro-error' : undefined}
               autoComplete="email"
               required
               maxLength={254}
@@ -122,8 +129,9 @@ function Cadastro() {
             <input
               type={showPassword ? "text" : "password"}
               id="cadastro-senha"
+              aria-describedby={`password-requirements${erro ? ' cadastro-error' : ''}`}
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               value={senha}
               onChange={(e) => setSenha(e.target.value)}
@@ -138,8 +146,9 @@ function Cadastro() {
             <input
               type={showPassword ? "text" : "password"}
               id="cadastro-confirmar"
+              aria-describedby={erro ? 'cadastro-error' : undefined}
               required
-              minLength={6}
+              minLength={8}
               autoComplete="new-password"
               value={confirmarSenha}
               onChange={(e) =>
@@ -151,8 +160,9 @@ function Cadastro() {
           </div>
 
           <button type="button" className="text-sm font-semibold text-violet-600" aria-pressed={showPassword} onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Ocultar senha" : "Mostrar senha"}</button>
+          <p id="password-requirements" className="muted text-sm">{passwordRequirements}</p>
           {erro && (
-            <div role="alert" className="border border-red-500 bg-red-50 text-red-700 p-3 rounded-lg">
+            <div id="cadastro-error" role="alert" className="border border-red-500 bg-red-50 text-red-700 p-3 rounded-lg">
               {erro}
             </div>
           )}
@@ -163,12 +173,13 @@ function Cadastro() {
           >
             {busy ? 'Criando conta…' : 'Criar conta'}
           </button>
+          </fieldset>
         </form>
 
         <p className="mt-6 text-center">
           Já possui uma conta?{" "}
           <Link
-            to="/login"
+            to="/login" state={{ from: location.state?.from }}
             className="font-semibold underline"
           >
             Entrar

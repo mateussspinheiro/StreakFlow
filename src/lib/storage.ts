@@ -1,7 +1,6 @@
 // Um documento versionado mantém alterações de hábitos e conclusões atômicas.
 export const STORAGE_KEYS = {
   data: 'streakflow_data',
-  session: 'streakflow_logged',
 } as const
 
 export const LEGACY_KEYS = {
@@ -9,7 +8,6 @@ export const LEGACY_KEYS = {
   profile: 'streakflow:profile',
   habits: 'streakflow:habits',
   compact: 'streakflow:compact',
-  session: 'streakflow:session',
 } as const
 
 export function readStored(key: keyof typeof STORAGE_KEYS): unknown {
@@ -20,17 +18,6 @@ export function readStored(key: keyof typeof STORAGE_KEYS): unknown {
 export function writeStored(key: keyof typeof STORAGE_KEYS, value: unknown) {
   try { localStorage.setItem(STORAGE_KEYS[key], JSON.stringify(value)) }
   catch { throw new Error('Não foi possível salvar. Verifique o espaço e a permissão de armazenamento do navegador.') }
-}
-
-// Uma sessão inválida não deve impedir a leitura dos dados do usuário.
-export function hasStoredSession() {
-  try { return readStored('session') === true }
-  catch { return false }
-}
-
-export function removeSession() {
-  try { localStorage.removeItem(STORAGE_KEYS.session) }
-  catch { throw new Error('Não foi possível encerrar a sessão neste navegador. Tente novamente.') }
 }
 
 export function readLegacy(key: keyof typeof LEGACY_KEYS): unknown {

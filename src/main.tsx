@@ -4,6 +4,10 @@ import { BrowserRouter } from "react-router";
 import "./index.css";
 import App from "./App";
 
+import { initializeAuth } from './lib/auth';
+
+initializeAuth();
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>

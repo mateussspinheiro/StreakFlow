@@ -12,8 +12,7 @@ class LocalClock extends Date {
 const input = { title: 'Água', category: 'Saúde', description: '', weeklyGoal: 7 }
 function setup(extra = {}) {
   const fixture = app([], LocalClock)
-  fixture.store.createUser({ profile: { name: 'Teste local', email: 'teste@example.com' }, salt: Array(16).fill(1), verifier: 'a'.repeat(64) })
-  fixture.store.startSession()
+  fixture.store.setAuthenticatedUser({ sub: 'test-sub', name: 'Teste', email: 'teste@example.com' })
   const habit = fixture.store.saveHabit({ ...input, ...extra })
   return { ...fixture, habit }
 }
@@ -88,6 +87,7 @@ test('hábitos e check-ins v3 antigos continuam binários e editáveis', () => {
   const legacy = { version: 3, user: { profile: { name: 'Teste', email: 'teste@example.com' }, salt: Array(16).fill(1), verifier: 'b'.repeat(64) }, habits: [{ ...input, id: 1, createdAt: '2026-09-01' }], completions: [{ id: '1:2026-09-21', habitId: 1, date: '2026-09-21', status: 'completed', note: 'Anterior' }], settings: { compact: false, habitReminders: false, weeklySummary: false, firstDayOfWeek: 1, theme: 'system' } }
   const { store, tracking } = app([['streakflow_data', JSON.stringify(legacy)], ['streakflow_logged', 'true']], LocalClock)
   assert.equal(store.getState().storageError, null)
+  store.setAuthenticatedUser({ sub: 'test-sub', name: 'Teste', email: 'teste@example.com' })
   assert.equal(tracking.getTracking(store.getState().habits[0]).trackingType, 'binary')
   assert.equal(store.completeCheckIn(1).status, 'completed')
   assert.equal(store.getIndicators(store.getState(), new LocalClock()).currentStreak, 2)
@@ -153,6 +153,7 @@ test('edição da meta e unidade preserva histórico e acompanhamento do dia', (
     constructor(...args) { super(...(args.length ? args : [2026, 8, 23, 10, 0])) }
   }
   const nextDay = app(data, Tomorrow).store
+  nextDay.setAuthenticatedUser({ sub: 'test-sub', name: 'Teste', email: 'teste@example.com' })
   const nextRecord = nextDay.addProgress(habit.id, 0.5)
   assert.equal(nextRecord.date, '2026-09-23')
   assert.equal(nextRecord.tracking.target, 3)
@@ -233,7 +234,7 @@ test('falha de armazenamento preserva o valor anterior; logout impede atalhos', 
   assert.throws(() => store.addProgress(habit.id, 250), /salvar/)
   assert.equal(store.getTodayCheckIn(habit.id).value, 500)
   const second = setup(numeric)
-  second.store.endSession()
+  second.store.setAuthenticatedUser(null)
   assert.throws(() => second.store.addProgress(second.habit.id, 500), /Entre/)
   assert.throws(() => second.store.completeCheckIn(second.habit.id), /Entre/)
 })
@@ -246,6 +247,7 @@ test('auditoria: progresso parcial e conclusão sobrevivem a duas recargas', () 
   assert.equal(reloaded.store.getState().storageError, null)
   assert.equal(reloaded.store.getTodayCheckIn(initial.habit.id).value, 750)
   assert.equal(reloaded.store.getTodayCheckIn(initial.habit.id).status, 'partial')
+  reloaded.store.setAuthenticatedUser({ sub: 'test-sub', name: 'Teste', email: 'teste@example.com' })
   reloaded.store.completeCheckIn(initial.habit.id)
   const completed = app(reloaded.data, LocalClock).store
   assert.equal(completed.getState().storageError, null)

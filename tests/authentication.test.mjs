@@ -1,4 +1,4 @@
-import { test } from 'node:test'
+﻿import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import vm from 'node:vm'
@@ -8,186 +8,298 @@ import * as jsx from 'react/jsx-runtime'
 import * as router from 'react-router'
 import { app } from './helpers/store.mjs'
 
-const profile = { name: 'Pessoa Teste', email: 'pessoa@example.com' }
-const habit = { title: 'Ler', category: 'Leitura', description: '', weeklyGoal: 3 }
-const location = (pathname = '/') => ({ pathname, search: '', hash: '' })
-
-// Executa componentes reais; substitui somente hooks de ambiente e páginas-filhas.
-function component(path, fixture, current = location(), states = [], navigate = () => {}) {
-  let index = 0
-  const source = readFileSync(new URL(`../src/${path}.tsx`, import.meta.url), 'utf8')
-  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX } }).outputText
-  const context = { exports: {}, require: name => {
+function compile(path, dependencies, globals = {}) {
+  const source = readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8').replaceAll('import.meta.env', 'testEnv')
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText
+  const context = { exports: {}, ...globals, require: dependencies }
+  vm.runInNewContext(compiled, context)
+  return context.exports
+}
+const errors = compile('lib/authErrors.ts', () => ({}))
+function fixture(overrides = {}, initial = []) {
+  const local = app(initial)
+  let signedIn = false
+  let hub
+  const calls = []
+  const sdk = {
+    fetchAuthSession: async () => signedIn ? { tokens: {} } : {},
+    getCurrentUser: async () => ({ userId: 'cognito-sub', username: 'cognito-user' }),
+    fetchUserAttributes: async () => ({ name: 'Pessoa Teste', email: 'pessoa@example.com' }),
+    signIn: async input => { calls.push(['signIn', input]); signedIn = true; return { isSignedIn: true, nextStep: { signInStep: 'DONE' } } },
+    signOut: async () => { signedIn = false },
+    signUp: async input => { calls.push(['signUp', input]); return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } } },
+    confirmSignUp: async input => { calls.push(['confirmSignUp', input]); return { isSignUpComplete: true } },
+    resendSignUpCode: async input => { calls.push(['resend', input]) },
+    resetPassword: async input => { calls.push(['reset', input]); return { nextStep: { resetPasswordStep: 'CONFIRM_RESET_PASSWORD_WITH_CODE', codeDeliveryDetails: { destination: 'p***@example.com' } } } },
+    confirmResetPassword: async input => { calls.push(['confirmReset', input]) },
+    ...overrides,
+  }
+  const auth = compile('lib/auth.ts', name => {
+    if (name === 'aws-amplify/auth') return sdk
+    if (name === 'aws-amplify/utils') return { Hub: { listen: (_, callback) => { hub = callback } } }
+    if (name === './amplify') return { configureAuth: () => {} }
+    if (name === './streakflow') return local.store
+    if (name === './authErrors') return errors
+    throw new Error(name)
+  }, { window: { addEventListener() {}, setInterval() {} } })
+  return { ...local, auth, calls, sdk, emit: event => hub({ payload: { event } }) }
+}
+function page(path, fixture, routeState = {}) {
+  const values = [], destinations = []
+  let cursor = 0
+  const hooks = {
+    ...React, useEffect() {},
+    useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], next => { values[i] = typeof next === 'function' ? next(values[i]) : next }] },
+    useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i] },
+  }
+  function require(name) {
     if (name === 'react/jsx-runtime') return jsx
-    if (name === 'react') return { ...React, useEffect: () => {}, useState: initial => [index < states.length ? states[index++] : initial, () => {}] }
-    if (name === 'react-router') return { ...router, useLocation: () => current, useNavigate: () => navigate }
-    if (name.endsWith('/auth')) return fixture.auth
-    if (name.endsWith('/streakflow')) return fixture.store
-    if (name.endsWith('/useStreakFlow')) return { useStreakFlow: () => fixture.store.getState() }
-    if (name.endsWith('/useTheme')) return { useTheme: () => {} }
+    if (name === 'react') return hooks
+    if (name === 'react-router') return { ...router, useLocation: () => ({ pathname: '/progresso', search: '?periodo=7', hash: '#grafico', state: routeState }), useNavigate: () => (to, options) => destinations.push({ to, ...options }) }
+    if (name.endsWith('/useAuth')) return { useAuth: () => ({ ...fixture.auth.getAuthState(), ...fixture.auth }) }
+    if (name.endsWith('/useAuthRequest')) return compile('lib/useAuthRequest.ts', require)
+    if (name.endsWith('/authErrors')) return errors
     const child = () => null
     child.displayName = name.split('/').at(-1)
     return { __esModule: true, default: child }
-  } }
-  vm.runInNewContext(compiled, context)
-  return context.exports.default
+  }
+  const Component = compile(path, require, { FormData: class { constructor(data) { this.data = data } get(key) { return this.data[key] } } }).default
+  const render = props => { cursor = 0; return Component(props) }
+  return { render, values, destinations }
 }
-
-function route(fixture, path) {
-  const tree = component('App', fixture, location(path))()
-  const routes = React.Children.toArray(tree.props.children).find(child => child.type === router.Routes)
-  return router.matchRoutes(router.createRoutesFromElements(routes.props.children), path)
-}
-
-function guard(fixture, path = '/dashboard') {
-  return component('components/ProtectedRoute', fixture, location(path))({ authenticated: fixture.store.getState().authenticated, children: 'private-content' })
-}
-
-function findForm(node) {
+function find(node, predicate) {
   if (!React.isValidElement(node)) return undefined
-  if (node.type === 'form') return node
-  return React.Children.toArray(node.props.children).map(findForm).find(Boolean)
+  if (predicate(node)) return node
+  return React.Children.toArray(node.props.children).map(child => find(child, predicate)).find(Boolean)
+}
+const form = tree => find(tree, node => node.type === 'form')
+const submit = async (tree, data = {}) => {
+  await form(tree).props.onSubmit({ preventDefault() {}, currentTarget: data })
+  await new Promise(resolve => setImmediate(resolve))
 }
 
-async function register(initial = []) {
-  const fixture = app(initial)
-  await fixture.auth.registerAccount(profile, 'senha123')
-  return fixture
-}
-
-async function login(fixture, password = 'senha123', state) {
-  const destinations = []
-  const Login = component('pages/Login', fixture, { ...location('/login'), state }, [profile.email, password, '', false, false], path => destinations.push(path))
-  const form = findForm(Login({ onEnter: fixture.store.startSession }))
-  await form.props.onSubmit({ preventDefault() {} })
-  return destinations
-}
-
-test('autenticação: navegador limpo inicia deslogado sem criar dados', () => {
-  const fixture = app()
-  assert.equal(fixture.store.getState().authenticated, false)
-  assert.equal(fixture.store.getState().user, null)
-  assert.equal(fixture.data.size, 0)
+test('Cognito: sessão inicial bloqueia conteúdo privado; visitante preserva destino completo', async () => {
+  const f = fixture()
+  const guard = page('components/ProtectedRoute.tsx', f)
+  assert.ok(find(guard.render({ authenticated: false, isLoading: true }), node => node.props.role === 'status'))
+  await f.auth.checkSession()
+  const result = guard.render({ authenticated: false, isLoading: false, children: 'private' })
+  assert.equal(result.type, router.Navigate)
+  assert.equal(result.props.to, '/login')
+  assert.equal(result.props.state.from, '/progresso?periodo=7#grafico')
 })
 
-test('autenticação: raiz mostra Landing pública ao visitante', () => {
-  const fixture = app()
-  assert.equal(route(fixture, '/').at(-1).route.element.type.displayName, 'Landing')
-  assert.equal(fixture.data.size, 0)
+test('Cognito: login usa SDK, restaura sessão, retorna à rota solicitada e logout bloqueia', async () => {
+  const f = fixture()
+  await f.auth.checkSession()
+  const login = page('pages/Login.tsx', f, { from: '/progresso?periodo=7#grafico' })
+  login.values.push(' PESSOA@example.com ', 'Senha123!', '', false, false)
+  await submit(login.render())
+  assert.equal(f.calls[0][1].username, 'pessoa@example.com')
+  assert.equal(login.destinations[0].to, '/progresso?periodo=7#grafico')
+  assert.equal(f.auth.getAuthState().user.sub, 'cognito-sub')
+  await f.auth.checkSession()
+  assert.equal(f.auth.getAuthState().isAuthenticated, true)
+  const guard = page('components/ProtectedRoute.tsx', f)
+  assert.equal(guard.render({ authenticated: true, children: 'private' }), 'private')
+  const habit = f.store.saveHabit({ title: 'Ler', category: 'Estudos', description: '', weeklyGoal: 3 })
+  f.store.completeCheckIn(habit.id)
+  const before = f.data.get('streakflow_data')
+  await f.auth.signOut()
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
+  assert.equal(f.store.getState().authenticated, false)
+  assert.equal(f.data.get('streakflow_data'), before)
+  assert.equal(guard.render({ authenticated: false }).props.to, '/login')
 })
 
-test('autenticação: login e cadastro são públicos e não iniciam sessão', () => {
-  const fixture = app()
-  for (const [path, name] of [['/login', 'Login'], ['/cadastro', 'Cadastro']]) assert.equal(route(fixture, path).at(-1).route.element.type.displayName, name)
-  assert.equal(fixture.store.getState().authenticated, false)
-  assert.equal(fixture.data.size, 0)
+test('Cognito: flags locais nunca autenticam e retorno externo é rejeitado', async () => {
+  const f = fixture({}, [['streakflow_logged', 'true'], ['token', 'fake']])
+  await f.auth.checkSession()
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
+  for (const from of ['https://example.com', '//example.com', '/dashboard\\evil', '/login']) assert.equal(errors.returnDestination(from), '/dashboard')
 })
 
-test('autenticação: visitante é enviado ao Login nas rotas privadas', () => {
-  const fixture = app()
-  for (const path of ['/dashboard', '/meus-habitos', '/historico', '/progresso', '/dashboard/perfil', '/dashboard/configuracoes']) {
-    assert.ok(route(fixture, path).some(match => match.route.element?.type.displayName === 'ProtectedRoute'))
-    const redirect = guard(fixture, path)
-    assert.equal(redirect.type, router.Navigate)
-    assert.equal(redirect.props.to, '/login')
-    assert.equal(redirect.props.state.from, path)
+test('Cognito: cadastro solicita confirmação sem autenticar nem persistir senha', async () => {
+  const f = fixture()
+  await f.auth.checkSession()
+  const signup = page('pages/Cadastro.tsx', f, { from: '/historico' })
+  signup.values.push('Pessoa Teste', 'pessoa@example.com', 'Senha123!', 'Senha123!', '', false, false)
+  await submit(signup.render())
+  assert.equal(signup.destinations[0].to, '/confirmar-email')
+  assert.equal(signup.destinations[0].state.from, '/historico')
+  assert.equal(f.calls[0][1].options.userAttributes.name, 'Pessoa Teste')
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
+  assert.equal(f.data.size, 0)
+})
+
+test('Cognito: confirmação mostra erro amigável, reenvia e retorna ao login com e-mail', async () => {
+  const f = fixture({ confirmSignUp: async () => { throw { name: 'CodeMismatchException', message: 'internal SDK' } } })
+  await f.auth.checkSession()
+  const confirm = page('pages/ConfirmarEmail.tsx', f, { email: 'pessoa@example.com', from: '/historico' })
+  await submit(confirm.render(), { code: '123456' })
+  assert.match(find(confirm.render(), node => node.props.role === 'alert').props.children, /Código incorreto/)
+  const resend = find(confirm.render(), node => node.type === 'button' && node.props.children === 'Reenviar código')
+  resend.props.onClick()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(f.calls.at(-1)[0], 'resend')
+  f.sdk.confirmSignUp = async () => ({ isSignUpComplete: true })
+  await submit(confirm.render(), { code: '123456' })
+  assert.equal(confirm.destinations[0].to, '/login')
+  assert.equal(confirm.destinations[0].state.email, 'pessoa@example.com')
+  assert.match(confirm.destinations[0].state.message, /Conta confirmada com sucesso/)
+})
+
+test('Cognito: recuperação envia código, valida nova senha e confirma redefinição', async () => {
+  const f = fixture()
+  await f.auth.checkSession()
+  const reset = page('pages/RecuperarSenha.tsx', f, { email: 'pessoa@example.com' })
+  await submit(reset.render())
+  assert.equal(f.calls[0][0], 'reset')
+  await submit(reset.render(), { code: '123456', password: 'curta', confirmation: 'curta' })
+  assert.equal(f.calls.length, 1)
+  await submit(reset.render(), { code: '123456', password: 'NovaSenha123!', confirmation: 'NovaSenha123!' })
+  assert.equal(f.calls[1][0], 'confirmReset')
+  assert.equal(f.calls[1][1].newPassword, 'NovaSenha123!')
+  assert.equal(reset.destinations[0].to, '/login')
+})
+
+test('Cognito: erros de login não autenticam, conta não confirmada abre confirmação', async () => {
+  for (const name of ['NotAuthorizedException', 'UserNotConfirmedException', 'NetworkError', 'LimitExceededException']) {
+    const f = fixture({ signIn: async () => { throw { name, message: 'internal' } } })
+    await f.auth.checkSession()
+    const login = page('pages/Login.tsx', f)
+    login.values.push('pessoa@example.com', 'Senha123!', '', false, false)
+    await submit(login.render())
+    assert.equal(f.auth.getAuthState().isAuthenticated, false)
+    if (name === 'UserNotConfirmedException') assert.equal(login.destinations[0].to, '/confirmar-email')
+    else assert.ok(find(login.render(), node => node.props.role === 'alert'))
   }
 })
 
-test('autenticação: formulário valida credenciais antes de iniciar sessão', async () => {
-  const fixture = await register()
-  assert.equal(fixture.store.getState().authenticated, false)
-  assert.deepEqual(await login(fixture), ['/dashboard'])
-  assert.equal(fixture.store.getState().authenticated, true)
+test('Cognito: configuração ausente é compreensível; configure ocorre uma única vez', () => {
+  let count = 0
+  const config = compile('lib/amplify.ts', () => ({ Amplify: { configure: () => { count++ } } }), { testEnv: {} })
+  assert.throws(() => config.configureAuth({ DEV: true }), /VITE_COGNITO_USER_POOL_ID/)
+  assert.throws(() => config.configureAuth({}), /ainda não está configurado/)
+  const env = { VITE_COGNITO_USER_POOL_ID: 'test-pool', VITE_COGNITO_CLIENT_ID: 'test-client' }
+  config.configureAuth(env); config.configureAuth(env)
+  assert.equal(count, 1)
 })
 
-test('autenticação: login inválido não cria sessão nem navega', async () => {
-  const fixture = await register()
-  assert.deepEqual(await login(fixture, 'incorreta'), [])
-  assert.equal(fixture.store.getState().authenticated, false)
-  assert.equal(fixture.data.has('streakflow_logged'), false)
+test('Cognito: falha de refresh e signedOut encerram acesso sem apagar dados', async () => {
+  const f = fixture()
+  f.auth.initializeAuth()
+  await f.auth.signIn('pessoa@example.com', 'Senha123!')
+  f.emit('tokenRefresh_failure')
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
+  assert.equal(f.store.getState().authenticated, false)
 })
 
-test('autenticação: recarga mantém sessão criada por login válido', async () => {
-  const fixture = await register()
-  await login(fixture)
-  assert.equal(app(fixture.data).store.getState().authenticated, true)
+test('Cognito: resposta de sessão atrasada não reabre acesso após logout', async () => {
+  const f = fixture()
+  await f.auth.signIn('pessoa@example.com', 'Senha123!')
+  let resolve
+  f.sdk.fetchUserAttributes = () => new Promise(done => { resolve = done })
+  const pending = f.auth.checkSession()
+  await new Promise(done => setImmediate(done))
+  await f.auth.signOut()
+  resolve({ email: 'pessoa@example.com' })
+  await pending
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
 })
 
-test('autenticação: logout remove somente a sessão e preserva hábitos e histórico', async () => {
-  const fixture = await register()
-  await login(fixture)
-  const saved = fixture.store.saveHabit(habit)
-  fixture.store.completeCheckIn(saved.id)
-  const before = fixture.data.get('streakflow_data')
-  fixture.store.endSession()
-  assert.equal(fixture.store.getState().authenticated, false)
-  assert.equal(fixture.data.has('streakflow_logged'), false)
-  assert.equal(fixture.data.get('streakflow_data'), before)
-  assert.equal(app(fixture.data).store.getState().authenticated, false)
+test('Cognito: sessão existente é restaurada na inicialização sem novo login', async () => {
+  const f = fixture({ fetchAuthSession: async () => ({ tokens: {} }) })
+  assert.equal(f.auth.getAuthState().isLoading, true)
+  await f.auth.checkSession()
+  assert.equal(f.auth.getAuthState().isLoading, false)
+  assert.equal(f.auth.getAuthState().isAuthenticated, true)
+  assert.equal(f.store.getState().authenticated, true)
+  assert.equal(f.calls.length, 0)
 })
 
-test('autenticação: dashboard volta ao Login após logout', async () => {
-  const fixture = await register()
-  await login(fixture)
-  assert.equal(guard(fixture), 'private-content')
-  fixture.store.endSession()
-  assert.equal(guard(fixture).props.to, '/login')
+test('Cognito: envio duplo de login não dispara duas chamadas ao SDK', async () => {
+  let count = 0
+  let resolve
+  const f = fixture({ signIn: () => { count++; return new Promise(done => { resolve = done }) } })
+  await f.auth.checkSession()
+  const login = page('pages/Login.tsx', f)
+  login.values.push('pessoa@example.com', 'Senha123!', '', false, false)
+  const tree = login.render()
+  const first = submit(tree)
+  const second = submit(tree)
+  assert.equal(count, 1)
+  resolve({ isSignedIn: false, nextStep: { signInStep: 'CONFIRM_SIGN_UP' } })
+  await Promise.all([first, second])
+  assert.equal(login.destinations.length, 1)
 })
 
-test('autenticação: conta e hábitos armazenados não bastam para autenticar', async () => {
-  const fixture = await register()
-  await login(fixture)
-  fixture.store.saveHabit(habit)
-  fixture.store.endSession()
-  const state = app(fixture.data).store.getState()
-  assert.equal(state.habits.length, 1)
-  assert.ok(state.user)
-  assert.equal(state.authenticated, false)
+test('Cognito: erro de recuperação permanece na etapa e permite nova tentativa', async () => {
+  const f = fixture({ confirmResetPassword: async () => { throw { name: 'ExpiredCodeException' } } })
+  await f.auth.checkSession()
+  const reset = page('pages/RecuperarSenha.tsx', f, { email: 'pessoa@example.com' })
+  await submit(reset.render())
+  await submit(reset.render(), { code: '123456', password: 'NovaSenha123!', confirmation: 'NovaSenha123!' })
+  assert.match(find(reset.render(), node => node.props.role === 'alert').props.children, /expirou/)
+  assert.equal(reset.destinations.length, 0)
+  assert.equal(find(reset.render(), node => node.type === 'fieldset').props.disabled, false)
 })
 
-test('autenticação: dados de demonstração e tokens desconhecidos não criam sessão', () => {
-  const fixture = app([['mockUser', JSON.stringify(profile)], ['token', 'fake-token'], ['isAuthenticated', 'true'], ['streakflow_logged', 'true']])
-  assert.equal(fixture.store.getState().authenticated, false)
-  assert.equal(fixture.store.getState().user, null)
+test('Cognito: nome sem permissão não impede cadastro por e-mail', async () => {
+  const inputs = []
+  const f = fixture({ signUp: async input => {
+    inputs.push(input)
+    if (input.options.userAttributes.name) throw { name: 'NotAuthorizedException', message: 'A client attempted to write unauthorized attribute' }
+    return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } }
+  } })
+  const result = await f.auth.signUp({ name: 'Pessoa Teste', email: 'pessoa@example.com' }, 'Senha123!')
+  assert.equal(result.nextStep.signUpStep, 'CONFIRM_SIGN_UP')
+  assert.equal(inputs.length, 2)
+  assert.equal(inputs[1].options.userAttributes.name, undefined)
+  assert.equal(inputs[1].options.userAttributes.email, 'pessoa@example.com')
 })
 
-test('autenticação: raiz continua Landing mesmo com sessão válida', async () => {
-  const fixture = await register()
-  await login(fixture)
-  const element = route(fixture, '/').at(-1).route.element
-  assert.equal(element.type.displayName, 'Landing')
-  assert.equal(element.props.authenticated, true)
+test('Cognito: erro de perfil não encerra sessão nem altera hábitos', async () => {
+  const f = fixture({ updateUserAttributes: async () => { throw { name: 'NotAuthorizedException', message: 'A client attempted to write unauthorized attribute' } } })
+  await f.auth.signIn('pessoa@example.com', 'Senha123!')
+  const before = JSON.stringify(f.store.getState())
+  await assert.rejects(f.auth.updateProfile({ name: 'Outro nome', email: 'pessoa@example.com' }), error => {
+    assert.match(errors.authError(error), /continuar usando sua conta/)
+    return true
+  })
+  assert.equal(f.auth.getAuthState().isAuthenticated, true)
+  assert.equal(JSON.stringify(f.store.getState()), before)
 })
 
-test('regressão: cadastro não herda marca de sessão órfã após recarga', async () => {
-  const fixture = await register([['streakflow_logged', 'true']])
-  assert.equal(fixture.store.getState().authenticated, false)
-  assert.equal(app(fixture.data).store.getState().authenticated, false)
-  assert.ok(app(fixture.data).store.getState().user)
+test('Cognito: perfil salva somente atributos alterados e confirma novo e-mail', async () => {
+  const inputs = []
+  let email = 'pessoa@example.com'
+  const f = fixture({
+    fetchUserAttributes: async () => ({ name: 'Pessoa Teste', email }),
+    updateUserAttributes: async input => { inputs.push(input); return { email: { nextStep: { updateAttributeStep: 'CONFIRM_ATTRIBUTE_WITH_CODE' } } } },
+    confirmUserAttribute: async input => { inputs.push(input); email = 'novo@example.com' },
+  })
+  await f.auth.signIn(email, 'Senha123!')
+  assert.equal(await f.auth.updateProfile({ name: 'Pessoa Teste', email: 'novo@example.com' }), true)
+  assert.equal(inputs[0].userAttributes.name, undefined)
+  await f.auth.confirmEmailChange('123456')
+  assert.equal(inputs[1].userAttributeKey, 'email')
+  assert.equal(f.auth.getAuthState().user.email, 'novo@example.com')
 })
 
-test('regressão: sessão malformada não bloqueia nem apaga dados existentes', async () => {
-  const fixture = await register()
-  await login(fixture)
-  fixture.store.saveHabit(habit)
-  const before = fixture.data.get('streakflow_data')
-  for (const invalid of ['{', '"true"', '{}', 'false']) {
-    const reloaded = app([...fixture.data, ['streakflow_logged', invalid]])
-    assert.equal(reloaded.store.getState().authenticated, false)
-    assert.equal(reloaded.store.getState().storageError, null)
-    assert.equal(reloaded.store.getState().habits.length, 1)
-    assert.equal(reloaded.data.get('streakflow_data'), before)
-  }
-})
-
-test('autenticação: retorno preserva busca e fragmento e rejeita destinos externos', async () => {
-  const fixture = await register()
-  const current = { pathname: '/historico', search: '?periodo=7', hash: '#registros' }
-  const redirect = component('components/ProtectedRoute', fixture, current)({ authenticated: false })
-  assert.deepEqual(await login(fixture, 'senha123', redirect.props.state), ['/historico?periodo=7#registros'])
-  for (const from of ['https://example.com', '//example.com', '/dashboard\\example.com', '/login']) {
-    fixture.store.endSession()
-    assert.deepEqual(await login(fixture, 'senha123', { from }), ['/dashboard'])
+test('Cognito: cadastro inválido é bloqueado antes de chamar o SDK', async () => {
+  for (const [name, email, password, confirmation] of [
+    ['Ab', 'pessoa@example.com', 'Senha123!', 'Senha123!'],
+    ['Pessoa', 'invalido', 'Senha123!', 'Senha123!'],
+    ['Pessoa', 'pessoa@example.com', 'curta', 'curta'],
+    ['Pessoa', 'pessoa@example.com', 'Senha123!', 'OutraSenha123!'],
+  ]) {
+    const f = fixture()
+    await f.auth.checkSession()
+    const signup = page('pages/Cadastro.tsx', f)
+    signup.values.push(name, email, password, confirmation, '', false, false)
+    await submit(signup.render())
+    assert.equal(f.calls.length, 0)
+    assert.ok(find(signup.render(), node => node.props.role === 'alert'))
   }
 })

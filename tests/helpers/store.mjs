@@ -21,6 +21,5 @@ export function app(initial = [], clock = Date) {
     modules.set(name, context.exports)
     return context.exports
   }
-  return { store: load('streakflow'), auth: load('auth'), dates: load('habits'), insights: load('insights'), tracking: load('tracking'), consistency: load('consistency'), data, block: () => { blocked = true } }
+  return { store: load('streakflow'), dates: load('habits'), insights: load('insights'), tracking: load('tracking'), consistency: load('consistency'), heatmap: load('heatmap'), data, block: () => { blocked = true } }
 }
-
