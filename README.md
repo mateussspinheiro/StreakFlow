@@ -356,3 +356,34 @@ Os testes usam mocks do SDK; não enviam e-mail nem fazem chamadas à AWS. Após
 Referência das APIs: [documentação oficial do Amplify Auth](https://docs.amplify.aws/react/frontend/auth/sign-up/).
 
 Se o Cognito rejeitar a escrita do atributo opcional `name` durante o cadastro, o serviço tenta cadastrar apenas com e-mail e senha. Essa tentativa só ocorre no erro explícito de atributo não autorizado; falhas de rede não repetem o cadastro automaticamente. Sem nome disponível, a interface usa a parte inicial do e-mail. Na edição do perfil, apenas atributos alterados são enviados; falta de permissão mostra uma mensagem amigável e mantém a sessão existente.
+
+## Login com Google via Cognito
+
+O login por e-mail/senha permanece disponível. O botão **Continuar com Google** em `/login` usa `signInWithRedirect({ provider: 'Google' })` pelo Cognito, sem SDK ou credenciais Google no frontend.
+
+Configuração em `src/lib/amplify.ts`:
+
+- Domínio: `us-east-1ceh8jusxq.auth.us-east-1.amazoncognito.com` (hostname, sem protocolo).
+- Fluxo: Authorization Code, com PKCE gerenciado pelo Amplify.
+- Escopos: `openid`, `email`, `profile`.
+- Retorno de entrada e saída: `http://localhost:5173/` e `https://streakflow.mateus-pinheiro.feliz.web.ufersa.dev.br/`.
+- User Pool ID e App Client ID continuam vindo das duas variáveis Vite existentes.
+
+Use **http://localhost:5173/** no desenvolvimento. `127.0.0.1`, outras portas e previews não estão cadastrados como callbacks. O endereço CloudFront informado não foi incluído na configuração do frontend porque não há URL de sign-out correspondente entre as URLs fornecidas. Para habilitá-lo no futuro, alinhe primeiro entrada/saída na AWS e no frontend, incluindo a correspondência exata da barra final.
+
+O destino protegido é enviado em `customState`, gerenciado pelo Amplify durante o redirect. Após validar o callback, o SDK emite `customOAuthState`; a aplicação valida novamente o destino, verifica a sessão e navega uma única vez. Não é criada uma flag de autenticação local. Aberturas normais da landing continuam públicas.
+
+O listener OAuth é carregado em `main.tsx`. `useAuth` reconhece tanto contas tradicionais quanto federadas pela sessão Cognito. Com os escopos OAuth atuais, os dados de nome/e-mail vêm do ID token retornado pelo SDK: a API `fetchUserAttributes` exige `aws.cognito.signin.user.admin`, que não está entre os escopos fornecidos. Para login tradicional, a leitura de atributos existente foi mantida. Nome ausente tem fallback para o e-mail.
+
+O logout continua usando `signOut()`. O Amplify limpa a sessão e, para OAuth, passa pelo endpoint de logout do Cognito e retorna à raiz configurada. A conta Google do navegador não precisa ser encerrada. A edição de atributos via API Cognito pode ser recusada em sessões OAuth sem o escopo de administração do próprio usuário; isso não impede o login. Nenhum escopo adicional ou configuração remota foi aplicado automaticamente.
+
+### Validação manual do Google
+
+1. Confirmar as duas variáveis Vite no ambiente local/Hosting e publicar o novo build pelo processo habitual.
+2. Abrir `/progresso` sem sessão, clicar em Google, escolher a conta e verificar o retorno a `/progresso`.
+3. Conferir nome/e-mail, recarregar, sair e confirmar bloqueio das rotas privadas.
+4. Repetir o login sem destino anterior: o resultado esperado é `/dashboard`.
+5. Cancelar no Google e conferir a mensagem amigável; tentar novamente.
+6. Revalidar login por senha, cadastro, confirmação e recuperação.
+
+Os testes automatizados usam mocks e não acessam AWS/Google. Referências: [provedores externos no Amplify](https://docs.amplify.aws/gen1/nextjs/build-a-backend/auth/add-social-provider/) e [eventos de autenticação](https://docs.amplify.aws/react/frontend/auth/listen-to-auth-events/).

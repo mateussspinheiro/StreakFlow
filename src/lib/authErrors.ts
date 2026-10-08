@@ -3,6 +3,12 @@ export const validPassword = (password: string) => password.length >= 8 && /[A-Z
 export function authError(error: unknown) {
   const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : ''
   const messages: Record<string, string> = {
+    OAuthNotConfigureException: 'O login com Google ainda não está configurado. Use e-mail e senha ou tente mais tarde.',
+    AuthTokenConfigException: 'Não foi possível iniciar o acesso. Tente novamente mais tarde.',
+    InvalidOriginException: 'Abra o StreakFlow pelo endereço oficial para entrar com Google.',
+    InvalidRedirectException: 'O endereço de retorno do login não está disponível. Tente pelo endereço oficial.',
+    OAuthRedirectFailure: 'Não foi possível concluir o login com Google. Tente novamente ou use e-mail e senha.',
+    OAuthSignOutException: 'Não foi possível concluir a saída do Cognito. Tente novamente.',
     ProfileAttributeNotAllowed: 'Não foi possível alterar esse dado do perfil. Entre em contato com o suporte. Você pode continuar usando sua conta.',
     NotAuthorizedException: 'E-mail ou senha incorretos, ou sessão expirada. Tente entrar novamente.',
     UserNotFoundException: 'Não foi possível acessar essa conta. Confira o e-mail informado.',

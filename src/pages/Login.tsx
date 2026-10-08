@@ -5,7 +5,7 @@ import { useAuth } from '../lib/useAuth';
 import { authError, returnDestination } from '../lib/authErrors';
 
 function Login() {
-  const { signIn, isLoading } = useAuth();
+  const { signIn, signInWithGoogle, isLoading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -15,6 +15,17 @@ function Login() {
   const [busy, setBusy] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const submitting = useRef(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+
+  async function handleGoogle() {
+    if (submitting.current || isLoading) return;
+    submitting.current = true;
+    setGoogleBusy(true);
+    setErro('');
+    try { await signInWithGoogle(location.state?.from); }
+    catch (error) { setErro(authError(error)); }
+    finally { submitting.current = false; setGoogleBusy(false); }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,7 +97,7 @@ function Login() {
           className="space-y-5 mt-8"
         >
 
-          <fieldset disabled={busy || isLoading} className="space-y-5" aria-describedby={erro ? "login-error" : undefined}>
+          <fieldset disabled={busy || googleBusy || isLoading} className="space-y-5" aria-describedby={erro ? "login-error" : undefined}>
           <div>
             <label htmlFor="login-email">E-mail</label>
 
@@ -140,6 +151,12 @@ function Login() {
           </fieldset>
         </form>
         <Link to="/recuperar" state={{ email, from: location.state?.from }} className="text-link">Esqueci minha senha</Link>
+
+        <div className="my-6 flex items-center gap-4 muted" aria-hidden="true"><span className="h-px flex-1 bg-current opacity-20" /><span>ou</span><span className="h-px flex-1 bg-current opacity-20" /></div>
+        <button type="button" className="secondary w-full flex items-center justify-center gap-3" disabled={busy || googleBusy || isLoading} aria-busy={googleBusy} aria-describedby={erro ? 'login-error' : undefined} onClick={() => void handleGoogle()}>
+          <span aria-hidden="true" className="text-lg font-bold">G</span>
+          {googleBusy ? 'Conectando ao Google…' : 'Continuar com Google'}
+        </button>
 
         <p className="text-center mt-6">
           Ainda não possui uma conta?{" "}

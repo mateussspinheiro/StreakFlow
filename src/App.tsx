@@ -35,10 +35,17 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const { storageError, settings } = useStreakFlow();
-  const { isAuthenticated: session, user, isLoading, error: authIssue, signOut, checkSession } = useAuth();
+  const { isAuthenticated: session, user, isLoading, error: authIssue, signOut, checkSession, oauthDestination, clearOAuthDestination } = useAuth();
   useTheme(settings.theme);
   const profile = user ?? { name: 'Visitante', email: '' };
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (session && oauthDestination) {
+      clearOAuthDestination();
+      navigate(oauthDestination, { replace: true });
+    }
+  }, [session, oauthDestination, clearOAuthDestination, navigate]);
 
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
   useEffect(() => {

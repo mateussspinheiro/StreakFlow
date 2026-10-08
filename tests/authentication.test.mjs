@@ -27,6 +27,7 @@ function fixture(overrides = {}, initial = []) {
     fetchUserAttributes: async () => ({ name: 'Pessoa Teste', email: 'pessoa@example.com' }),
     signIn: async input => { calls.push(['signIn', input]); signedIn = true; return { isSignedIn: true, nextStep: { signInStep: 'DONE' } } },
     signOut: async () => { signedIn = false },
+    signInWithRedirect: async input => { calls.push(['signInWithRedirect', input]) },
     signUp: async input => { calls.push(['signUp', input]); return { nextStep: { signUpStep: 'CONFIRM_SIGN_UP' } } },
     confirmSignUp: async input => { calls.push(['confirmSignUp', input]); return { isSignUpComplete: true } },
     resendSignUpCode: async input => { calls.push(['resend', input]) },
@@ -42,13 +43,13 @@ function fixture(overrides = {}, initial = []) {
     if (name === './authErrors') return errors
     throw new Error(name)
   }, { window: { addEventListener() {}, setInterval() {} } })
-  return { ...local, auth, calls, sdk, emit: event => hub({ payload: { event } }) }
+  return { ...local, auth, calls, sdk, emit: (event, data) => hub({ payload: { event, data } }) }
 }
 function page(path, fixture, routeState = {}) {
-  const values = [], destinations = []
+  const values = [], destinations = [], effects = []
   let cursor = 0
   const hooks = {
-    ...React, useEffect() {},
+    ...React, useEffect(effect) { effects.push(effect) },
     useState(initial) { const i = cursor++; if (!(i in values)) values[i] = typeof initial === 'function' ? initial() : initial; return [values[i], next => { values[i] = typeof next === 'function' ? next(values[i]) : next }] },
     useRef(initial) { const i = cursor++; if (!(i in values)) values[i] = { current: initial }; return values[i] },
   }
@@ -57,6 +58,8 @@ function page(path, fixture, routeState = {}) {
     if (name === 'react') return hooks
     if (name === 'react-router') return { ...router, useLocation: () => ({ pathname: '/progresso', search: '?periodo=7', hash: '#grafico', state: routeState }), useNavigate: () => (to, options) => destinations.push({ to, ...options }) }
     if (name.endsWith('/useAuth')) return { useAuth: () => ({ ...fixture.auth.getAuthState(), ...fixture.auth }) }
+    if (name.endsWith('/useStreakFlow')) return { useStreakFlow: () => fixture.store.getState() }
+    if (name.endsWith('/useTheme')) return { useTheme() {} }
     if (name.endsWith('/useAuthRequest')) return compile('lib/useAuthRequest.ts', require)
     if (name.endsWith('/authErrors')) return errors
     const child = () => null
@@ -65,7 +68,7 @@ function page(path, fixture, routeState = {}) {
   }
   const Component = compile(path, require, { FormData: class { constructor(data) { this.data = data } get(key) { return this.data[key] } } }).default
   const render = props => { cursor = 0; return Component(props) }
-  return { render, values, destinations }
+  return { render, values, destinations, effects }
 }
 function find(node, predicate) {
   if (!React.isValidElement(node)) return undefined
@@ -302,4 +305,96 @@ test('Cognito: cadastro inválido é bloqueado antes de chamar o SDK', async () 
     assert.equal(f.calls.length, 0)
     assert.ok(find(signup.render(), node => node.props.role === 'alert'))
   }
+})
+
+test('Google: botão acessível chama redirect com provider e destino, sem alterar login tradicional', async () => {
+  const f = fixture()
+  await f.auth.checkSession()
+  const login = page('pages/Login.tsx', f, { from: '/progresso?periodo=7#grafico' })
+  const tree = login.render()
+  const button = find(tree, node => node.type === 'button' && React.Children.toArray(node.props.children).includes('Continuar com Google'))
+  assert.equal(button.props.type, 'button')
+  assert.equal(button.props.disabled, false)
+  assert.ok(find(tree, node => node.props.autoComplete === 'current-password'))
+  button.props.onClick()
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(f.calls[0][0], 'signInWithRedirect')
+  assert.equal(f.calls[0][1].provider, 'Google')
+  assert.equal(f.calls[0][1].customState, '/progresso?periodo=7#grafico')
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
+})
+
+test('Google: clique duplicado é bloqueado durante redirect e falha permite tentar novamente', async () => {
+  let reject, count = 0
+  const f = fixture({ signInWithRedirect: () => { count++; return new Promise((_, fail) => { reject = fail }) } })
+  await f.auth.checkSession()
+  const login = page('pages/Login.tsx', f)
+  const button = find(login.render(), node => node.type === 'button' && React.Children.toArray(node.props.children).includes('Continuar com Google'))
+  button.props.onClick(); button.props.onClick()
+  assert.equal(count, 1)
+  assert.ok(find(login.render(), node => node.props['aria-busy'] === true && node.props.disabled))
+  reject({ name: 'OAuthNotConfigureException', message: 'internal SDK details' })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.match(find(login.render(), node => node.props.role === 'alert').props.children, /Google ainda não está configurado/)
+  assert.equal(find(login.render(), node => node.props['aria-busy'] === false).props.disabled, false)
+})
+
+const federatedSession = (name = 'Pessoa Google') => ({ tokens: {
+  accessToken: { payload: { scope: 'openid email profile' } },
+  idToken: { payload: { sub: 'cognito-sub', email: 'google@example.com', name } },
+} })
+
+test('Google: callback restaura usuário pelos atributos do token e navega ao destino uma vez', async () => {
+  const f = fixture({ fetchAuthSession: async () => federatedSession(), fetchUserAttributes: async () => { throw new Error('GetUser must not run without admin scope') } })
+  f.auth.initializeAuth()
+  f.emit('customOAuthState', '/historico?periodo=7#registros')
+  f.emit('signInWithRedirect')
+  f.emit('signedIn')
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(f.auth.getAuthState().user.name, 'Pessoa Google')
+  assert.equal(f.auth.getAuthState().user.email, 'google@example.com')
+  assert.equal(f.auth.getAuthState().user.sub, 'cognito-sub')
+  assert.equal(f.store.getState().authenticated, true)
+  const appPage = page('App.tsx', f)
+  appPage.render()
+  appPage.effects[0]()
+  assert.equal(appPage.destinations[0].to, '/historico?periodo=7#registros')
+  assert.equal(appPage.destinations[0].replace, true)
+  assert.equal(f.auth.getAuthState().oauthDestination, null)
+  await f.auth.signOut()
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
+  assert.equal(f.store.getState().authenticated, false)
+})
+
+test('Google: nome ausente usa e-mail; recarga normal não redireciona a landing', async () => {
+  const f = fixture({ fetchAuthSession: async () => federatedSession('') })
+  await f.auth.checkSession()
+  assert.equal(f.auth.getAuthState().user.name, 'google')
+  assert.equal(f.auth.getAuthState().oauthDestination, null)
+})
+
+test('Google: destino externo é rejeitado e falha de callback não autentica', async () => {
+  const f = fixture()
+  f.auth.initializeAuth()
+  await f.auth.signInWithGoogle('https://evil.example')
+  assert.equal(f.calls[0][1].customState, '/dashboard')
+  f.emit('customOAuthState', '//evil.example')
+  f.emit('signInWithRedirect_failure', { error: { message: 'raw token or provider error' } })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(f.auth.getAuthState().isAuthenticated, false)
+  assert.equal(f.auth.getAuthState().oauthDestination, null)
+  assert.match(f.auth.getAuthState().error, /login com Google/)
+})
+
+test('Google: configuração OAuth usa code, hostname e URLs de retorno autorizadas', () => {
+  let configured
+  const config = compile('lib/amplify.ts', () => ({ Amplify: { configure: value => { configured = value } } }), { testEnv: {} })
+  config.configureAuth({ VITE_COGNITO_USER_POOL_ID: 'test-pool', VITE_COGNITO_CLIENT_ID: 'test-client' })
+  const loginWith = configured.Auth.Cognito.loginWith
+  assert.equal(loginWith.email, true)
+  assert.equal(loginWith.oauth.responseType, 'code')
+  assert.equal(loginWith.oauth.domain, 'us-east-1ceh8jusxq.auth.us-east-1.amazoncognito.com')
+  assert.deepEqual(Array.from(loginWith.oauth.scopes), ['openid', 'email', 'profile'])
+  assert.ok(loginWith.oauth.redirectSignIn.includes('http://localhost:5173/'))
+  assert.deepEqual(Array.from(loginWith.oauth.redirectSignIn), Array.from(loginWith.oauth.redirectSignOut))
 })

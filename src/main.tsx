@@ -5,6 +5,7 @@ import "./index.css";
 import App from "./App";
 
 import { initializeAuth } from './lib/auth';
+import 'aws-amplify/auth/enable-oauth-listener';
 
 initializeAuth();
 
