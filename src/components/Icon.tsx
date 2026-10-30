@@ -13,6 +13,7 @@ const paths = {
   target: 'M21 12a9 9 0 1 1-9-9m0 4a5 5 0 1 0 5 5m-5 0 9-9m-5 0h5v5',
   check: 'm5 12 4 4L19 6',
   chart: 'M4 4v16h16M8 16v-4m4 4V8m4 8V5',
+  chat: 'M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z',
 } as const
 
 export default function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: keyof typeof paths }) {

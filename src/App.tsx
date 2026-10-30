@@ -21,6 +21,7 @@ import Historico from "./pages/Historico";
 import Progresso from "./pages/Progresso";
 import Perfil from "./pages/Perfil";
 import Configuracoes from "./pages/Configuracoes";
+import Assistente from "./pages/Assistente";
 import NotFound from './pages/NotFound';
 
 import DashboardLayout from "./layouts/DashboardLayout";
@@ -111,6 +112,11 @@ function App() {
         <Route
           path="/progresso"
           element={<Progresso />}
+        />
+
+        <Route
+          path="/assistente"
+          element={<Assistente />}
         />
 
         <Route

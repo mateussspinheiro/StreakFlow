@@ -11,7 +11,7 @@ const subscribe = (callback: () => void) => {
   return () => media.removeEventListener('change', callback)
 }
 const isMobile = () => window.matchMedia('(max-width: 767px)').matches
-const mainLinks = [['/dashboard', 'Dashboard', 'dashboard'], ['/meus-habitos', 'Meus hábitos', 'check'], ['/historico', 'Histórico', 'history'], ['/progresso', 'Progresso', 'chart']] as const
+const mainLinks = [['/dashboard', 'Dashboard', 'dashboard'], ['/meus-habitos', 'Meus hábitos', 'check'], ['/historico', 'Histórico', 'history'], ['/progresso', 'Progresso', 'chart'], ['/assistente', 'Assistente IA', 'chat']] as const
 const accountLinks = [['/dashboard/perfil', 'Meu perfil', 'profile'], ['/dashboard/configuracoes', 'Configurações', 'settings']] as const
 
 export default function Sidebar({ onLogout, profile }: { onLogout: () => Promise<void>; profile: Profile }) {

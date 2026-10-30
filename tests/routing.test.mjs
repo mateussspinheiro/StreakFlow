@@ -31,7 +31,7 @@ function routes(authenticated, pathname = '/', search = '', hash = '') {
 }
 
 const privatePages = {
-  '/dashboard': 'Dashboard', '/meus-habitos': 'MeusHabitos', '/historico': 'Historico', '/progresso': 'Progresso',
+  '/dashboard': 'Dashboard', '/meus-habitos': 'MeusHabitos', '/historico': 'Historico', '/progresso': 'Progresso', '/assistente': 'Assistente',
   '/dashboard/perfil': 'Perfil', '/dashboard/configuracoes': 'Configuracoes',
   '/dashboard/novo-habito': 'DashboardContent', '/dashboard/editar-habito/123': 'DashboardContent',
 }

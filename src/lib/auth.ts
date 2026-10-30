@@ -77,6 +77,14 @@ export async function signInWithGoogle(from?: unknown) {
   configureAuth()
   await cognito.signInWithRedirect({ provider: 'Google', customState: returnDestination(from) })
 }
+/** Access token atual do Cognito (renovado pelo SDK quando necessário). Nunca é persistido pelo app. */
+export async function getAccessToken() {
+  configureAuth()
+  const session = await cognito.fetchAuthSession()
+  const token = session.tokens?.accessToken?.toString()
+  if (!token) throw Object.assign(new Error(), { name: 'UserUnAuthenticatedException' })
+  return token
+}
 export function clearOAuthDestination() {
   oauthDestination = null
   state = { ...state, oauthDestination: null }

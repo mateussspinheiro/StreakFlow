@@ -151,6 +151,7 @@ A integração utiliza:
 - AWS Amplify Hosting
 - Amazon Cognito
 - Amplify Auth (`aws-amplify`)
+- Amazon API Gateway (WebSocket) + AWS Lambda + Google Gemini — assistente IA (ver [CHAT_WEBSOCKET_IMPLEMENTACAO.md](./CHAT_WEBSOCKET_IMPLEMENTACAO.md))
 
 ### Qualidade
 - Git
@@ -185,7 +186,9 @@ A integração utiliza:
 
 O Cognito cuida da identidade. Os hábitos e check-ins ainda são armazenados localmente no navegador.
 
-> **Importante:** Lambda, API Gateway e DynamoDB não fazem parte da arquitetura implementada atualmente. Eles permanecem como possibilidades de evolução.
+**Assistente IA:** a página `/assistente` abre uma conexão WebSocket autenticada (access token do Cognito) com um API Gateway WebSocket. A rota `$default` invoca uma Lambda que consulta o Google Gemini e devolve a resposta pela API de gerenciamento de conexões. O chat não acessa os hábitos do usuário. Detalhes e configuração AWS em [CHAT_WEBSOCKET_IMPLEMENTACAO.md](./CHAT_WEBSOCKET_IMPLEMENTACAO.md).
+
+> **Importante:** API Gateway e Lambda são usados apenas pelo assistente IA. Hábitos e check-ins continuam no `localStorage`; DynamoDB e uma API de dados por usuário permanecem como possibilidades de evolução.
 
 ---
 
@@ -231,6 +234,7 @@ Consequências:
 /meus-habitos
 /historico
 /progresso
+/assistente
 /dashboard/perfil
 /dashboard/configuracoes
 /dashboard/novo-habito
@@ -411,6 +415,7 @@ Os commits mais recentes registram:
 - [x] AWS Amplify Hosting
 - [x] Domínio personalizado
 - [x] Testes automatizados
+- [x] Assistente IA via API Gateway WebSocket + Lambda + Gemini (código; requer configuração na AWS)
 
 ### Próximas evoluções
 
@@ -418,7 +423,7 @@ Os commits mais recentes registram:
 - [ ] Isolamento por usuário/`sub`
 - [ ] Sincronização entre dispositivos
 - [ ] API autenticada
-- [ ] Avaliar Lambda, API Gateway e DynamoDB
+- [ ] Avaliar Lambda, API Gateway e DynamoDB para persistência dos hábitos
 - [ ] Resumo semanal
 - [ ] Atualizar `robots.txt` e `sitemap.xml`
 - [ ] Otimizar/dividir o bundle principal
@@ -433,6 +438,7 @@ Os commits mais recentes registram:
 - [ROUTING_DEPLOY.md](./ROUTING_DEPLOY.md)
 - [COGNITO_IMPLEMENTACAO.md](./COGNITO_IMPLEMENTACAO.md)
 - [GOOGLE_COGNITO_IMPLEMENTACAO.md](./GOOGLE_COGNITO_IMPLEMENTACAO.md)
+- [CHAT_WEBSOCKET_IMPLEMENTACAO.md](./CHAT_WEBSOCKET_IMPLEMENTACAO.md)
 
 ---
 
