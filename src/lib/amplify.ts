@@ -15,8 +15,8 @@ export function configureAuth(env = import.meta.env) {
     oauth: {
       domain: 'us-east-1ceh8jusxq.auth.us-east-1.amazoncognito.com',
       scopes: ['openid', 'email', 'profile'],
-      redirectSignIn: ['http://localhost:5173/', 'https://streakflow.mateus-pinheiro.feliz.web.ufersa.dev.br/'],
-      redirectSignOut: ['http://localhost:5173/', 'https://streakflow.mateus-pinheiro.feliz.web.ufersa.dev.br/'],
+      redirectSignIn: ['http://localhost:5173/', 'https://streakflow.mateus-pinheiro.feliz.web.ufersa.dev.br/', 'https://mateus-pinheiro.feliz.web.ufersa.dev.br/'],
+      redirectSignOut: ['http://localhost:5173/', 'https://streakflow.mateus-pinheiro.feliz.web.ufersa.dev.br/', 'https://mateus-pinheiro.feliz.web.ufersa.dev.br/'],
       responseType: 'code',
     },
   } } } })
